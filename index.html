@@ -170,6 +170,76 @@
     </div>
   </div>
 
+  <!-- ─── TOP 5 ELIMINATOR OVERLAY ─── -->
+  <div id="top5-overlay" class="top5-overlay hidden" role="dialog" aria-modal="true" aria-label="Top 5 Eliminator">
+
+    <!-- Particles canvas (confetti) -->
+    <canvas id="top5-confetti" class="top5-confetti-canvas" aria-hidden="true"></canvas>
+
+    <!-- Header -->
+    <div class="top5-header">
+      <div class="top5-header-left">
+        <span class="top5-logo-icon">🎲</span>
+        <div>
+          <h2 class="top5-title">Top 5 Eliminator</h2>
+          <p class="top5-subtitle" id="top5-subtitle">Eliminá hasta quedarte con <strong>1 sola película</strong> para ver esta noche</p>
+        </div>
+      </div>
+      <div class="top5-header-actions">
+        <button id="btn-top5-restart" class="btn-top5-action" aria-label="Probar con otras 5 películas">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M3 21v-5h5"/>
+          </svg>
+          Otras 5
+        </button>
+        <button id="btn-top5-close" class="btn-top5-close" aria-label="Cerrar Top 5 Eliminator">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="top5-loading" class="top5-loading hidden">
+      <div class="top5-loading-spinner"></div>
+      <p id="top5-loading-msg">Cargando información de las películas…</p>
+    </div>
+
+    <!-- Cards grid -->
+    <div id="top5-grid" class="top5-grid" role="list" aria-label="Películas candidatas"></div>
+
+    <!-- Counter -->
+    <div id="top5-counter" class="top5-counter" aria-live="polite">
+      <span id="top5-remaining">5</span> película(s) restante(s)
+    </div>
+
+    <!-- Winner banner -->
+    <div id="top5-winner-banner" class="top5-winner-banner hidden" aria-live="assertive">
+      <div class="winner-emoji" aria-hidden="true">🏆</div>
+      <h3 class="winner-title">¡Esta es tu película para ver hoy!</h3>
+      <p class="winner-subtitle" id="winner-movie-name"></p>
+      <a id="winner-lb-link" class="winner-lb-link" href="#" target="_blank" rel="noopener noreferrer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+        Ver en Letterboxd
+      </a>
+      <button id="btn-winner-restart" class="btn-top5-action" style="margin-top:12px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+          <path d="M21 3v5h-5"/>
+        </svg>
+        Probar con otras 5
+      </button>
+    </div>
+
+  </div>
+
   <script src="app.js"></script>
 </body>
 

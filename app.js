@@ -53,6 +53,14 @@ const state = {
   sortCommonAsc: true,
 };
 
+/** State for the Top 5 Eliminator mode */
+const top5State = {
+  pool: [],          // full pool of movies to pick from
+  current: [],       // current batch of ≤5 movies (enriched)
+  remaining: 0,      // how many cards are left on screen
+  confettiAnim: null // requestAnimationFrame id for confetti
+};
+
 // ─── DOM REFS ───────────────────────────────────────────────────────────────
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -75,6 +83,18 @@ const movieModal       = $('#movie-modal');
 const modalContent     = $('#modal-content');
 const modalCloseBtn    = $('#modal-close-btn');
 const btnSortCommon    = $('#btn-sort-common');
+
+// ── Top 5 Eliminator DOM refs (resolved lazily so they exist after HTML parse) ──
+const top5Overlay      = () => $('#top5-overlay');
+const top5Grid         = () => $('#top5-grid');
+const top5Loading      = () => $('#top5-loading');
+const top5LoadingMsg   = () => $('#top5-loading-msg');
+const top5Counter      = () => $('#top5-counter');
+const top5Remaining    = () => $('#top5-remaining');
+const top5WinnerBanner = () => $('#top5-winner-banner');
+const top5ConfettiCvs  = () => $('#top5-confetti');
+const winnerMovieName  = () => $('#winner-movie-name');
+const winnerLbLink     = () => $('#winner-lb-link');
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
@@ -240,7 +260,32 @@ function setupEventListeners() {
     if (e.target === movieModal) closeModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') {
+      closeModal();
+      closeTop5();
+    }
+  });
+
+  // Top 5 Eliminator — event delegation on the overlay
+  document.addEventListener('click', (e) => {
+    // Open Top5 via stats-bar button (dynamically added)
+    if (e.target.closest('#btn-open-top5')) {
+      openTop5();
+      return;
+    }
+    // Close button
+    if (e.target.closest('#btn-top5-close')) { closeTop5(); return; }
+    // Restart buttons (header + winner banner)
+    if (e.target.closest('#btn-top5-restart') || e.target.closest('#btn-winner-restart')) {
+      initTop5(top5State.pool);
+      return;
+    }
+    // Eliminate card
+    const elimBtn = e.target.closest('.top5-eliminate-btn');
+    if (elimBtn) {
+      eliminateTop5Card(elimBtn.dataset.id);
+      return;
+    }
   });
 }
 
@@ -714,6 +759,7 @@ function renderResults(comparison, userLabels) {
   const { common, uniqueByUser, allUsers, totalMovies } = comparison;
 
   // Stats bar
+  const hasCommon = common.length > 0;
   statsBar.innerHTML = `
     <div class="stat-chip">
       <span class="dot dot-green"></span>
@@ -729,6 +775,14 @@ function renderResults(comparison, userLabels) {
         <strong>${uniqueByUser[u]?.length ?? 0}</strong> únicas de <strong>${u}</strong>
       </div>
     `).join('')}
+    <button
+      id="btn-open-top5"
+      class="btn-top5-trigger"
+      ${!hasCommon ? 'disabled' : ''}
+      title="${hasCommon ? 'Modo eliminación: elegí la película de la noche' : 'Necesitás películas en común para usar el Top 5'}"
+    >
+      🎲 Top 5 Eliminator
+    </button>
   `;
 
   // Common badge
@@ -900,6 +954,365 @@ function closeModal() {
   movieModal.classList.add('hidden');
   movieModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+}
+
+// ─── TOP 5 ELIMINATOR ────────────────────────────────────────────────────────
+
+/**
+ * Opens the Top 5 overlay and starts a new round with the common movies pool.
+ */
+function openTop5() {
+  if (!state.lastResults) return;
+  const pool = state.lastResults.common || [];
+  if (pool.length === 0) return;
+
+  top5State.pool = pool;
+  top5Overlay().classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  initTop5(pool);
+}
+
+/**
+ * Close and reset the Top 5 overlay.
+ */
+function closeTop5() {
+  const overlay = top5Overlay();
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  overlay.classList.add('hidden');
+  document.body.style.overflow = '';
+  stopConfetti();
+  top5Grid().innerHTML = '';
+  top5WinnerBanner().classList.add('hidden');
+  top5Counter().classList.remove('hidden');
+  top5Loading().classList.add('hidden');
+}
+
+/**
+ * Randomly pick up to 5 movies, enrich them with og:image + synopsis + rating,
+ * then render the cards.
+ */
+async function initTop5(pool) {
+  // Reset UI
+  top5Grid().innerHTML = '';
+  top5WinnerBanner().classList.add('hidden');
+  top5Counter().classList.remove('hidden');
+  stopConfetti();
+
+  // Shuffle and pick ≤5
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const batch = shuffled.slice(0, Math.min(5, shuffled.length));
+  top5State.current = batch.map(m => ({ ...m }));
+  top5State.remaining = batch.length;
+  updateTop5Counter();
+
+  // Show loading
+  top5Loading().classList.remove('hidden');
+  top5Grid().classList.add('hidden');
+
+  // Enrich in parallel
+  await Promise.allSettled(
+    top5State.current.map(async (movie, i) => {
+      top5LoadingMsg().textContent = `Cargando información de las películas… (${i + 1}/${batch.length})`;
+      const enriched = await enrichMovieMeta(movie);
+      top5State.current[i] = { ...movie, ...enriched };
+    })
+  );
+
+  // Hide loading, show grid
+  top5Loading().classList.add('hidden');
+  top5Grid().classList.remove('hidden');
+  renderTop5Cards(top5State.current);
+}
+
+/**
+ * Fetch the individual Letterboxd film page and extract:
+ *   - poster: og:image URL (high-res)
+ *   - description: og:description (synopsis)
+ *   - rating: average rating numeric value (0–5) → converted to ★ string
+ */
+async function enrichMovieMeta(movie) {
+  const result = { poster: movie.poster || null, description: movie.description || '', rating: null };
+  try {
+    let html = null;
+    for (const proxy of PROXIES) {
+      try {
+        const proxyUrl = `${proxy.url}${encodeURIComponent(movie.link)}`;
+        const resp = await fetchWithTimeout(proxyUrl, 20000);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (proxy.mode === 'json-contents') {
+          const data = await resp.json();
+          if (!data.contents) throw new Error('Empty contents');
+          html = data.contents;
+        } else {
+          html = await resp.text();
+        }
+        if (!html || html.trim().length < 500) throw new Error('Response too short');
+        break;
+      } catch { html = null; }
+    }
+
+    if (!html) return result;
+
+    // ── og:image → real poster ──────────────────────────────────────────────
+    const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (ogImageMatch && ogImageMatch[1]) {
+      const imgUrl = ogImageMatch[1];
+      if (!imgUrl.includes('empty') && !imgUrl.startsWith('data:')) {
+        result.poster = imgUrl;
+      }
+    }
+
+    // ── og:description → synopsis ──────────────────────────────────────────
+    if (!result.description) {
+      const ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+      if (ogDescMatch && ogDescMatch[1]) {
+        result.description = decodeHtmlEntities(ogDescMatch[1].trim());
+      }
+    }
+
+    // ── Average rating ─────────────────────────────────────────────────────
+    // Letterboxd renders: <a class="display-rating" ...>3.8</a>
+    // or <meta itemprop="ratingValue" content="3.8">
+    const ratingMatch = html.match(/itemprop=["']ratingValue["'][^>]+content=["']([\d.]+)["']/i)
+                      || html.match(/class=["'][^"']*display-rating[^"']*["'][^>]*>([\d.]+)/i);
+    if (ratingMatch && ratingMatch[1]) {
+      const raw = parseFloat(ratingMatch[1]);
+      if (!isNaN(raw) && raw >= 0) result.rating = raw;
+    }
+
+  } catch (err) {
+    console.warn('[enrichMovieMeta]', movie.id, err.message);
+  }
+  return result;
+}
+
+/**
+ * Convert a 0–5 numeric rating to a string of filled/half/empty stars.
+ */
+function ratingToStars(rating) {
+  if (rating === null || rating === undefined) return null;
+  const val = Math.round(rating * 2) / 2; // round to nearest 0.5
+  const full  = Math.floor(val);
+  const half  = val % 1 >= 0.5 ? 1 : 0;
+  const empty = 5 - full - half;
+  return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
+}
+
+/**
+ * Render the Top 5 card batch into the grid.
+ */
+function renderTop5Cards(movies) {
+  const grid = top5Grid();
+  grid.innerHTML = '';
+
+  movies.forEach((movie) => {
+    const card = document.createElement('div');
+    card.className = 'top5-card';
+    card.dataset.id = movie.id;
+    card.setAttribute('role', 'listitem');
+
+    // Poster
+    const posterHtml = movie.poster
+      ? `<img class="top5-poster-img" src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="eager" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('afterbegin','<div class=top5-poster-placeholder><svg width=36 height=36 viewBox=\'0 0 24 24\' fill=none stroke=currentColor stroke-width=1.5><rect x=2 y=2 width=20 height=20 rx=3/><path d=\'M8 10l8 0M8 14l4 0\'/></svg><span>Sin póster</span></div>')" />`
+      : `<div class="top5-poster-placeholder">
+           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+             <rect x="2" y="2" width="20" height="20" rx="3"/><path d="M8 10l8 0M8 14l4 0"/>
+           </svg>
+           <span>Sin póster</span>
+         </div>`;
+
+    // Stars & synopsis
+    const stars = ratingToStars(movie.rating);
+    const starsHtml = stars
+      ? `<div class="top5-stars">${escapeHtml(stars)}</div>
+         <div class="top5-rating-label">${movie.rating?.toFixed(1)} / 5</div>`
+      : `<div class="top5-rating-label" style="font-size:.7rem;">Sin calificación</div>`;
+
+    const synopsis = movie.description
+      ? `<div class="top5-synopsis">${escapeHtml(movie.description.slice(0, 260))}</div>`
+      : `<div class="top5-synopsis" style="color:var(--text-muted);font-style:italic;">Sinopsis no disponible</div>`;
+
+    card.innerHTML = `
+      <div class="top5-poster-wrap">
+        ${posterHtml}
+        <div class="top5-info-overlay">
+          ${starsHtml}
+          ${synopsis}
+        </div>
+      </div>
+      <div class="top5-card-info">
+        <div class="top5-card-title">${escapeHtml(movie.title)}</div>
+        ${movie.year ? `<div class="top5-card-year">${movie.year}</div>` : ''}
+      </div>
+      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="Eliminar ${escapeHtml(movie.title)}">×</button>
+    `;
+
+    grid.appendChild(card);
+  });
+}
+
+/**
+ * Animate a card out, remove it, and check for winner.
+ */
+function eliminateTop5Card(movieId) {
+  const card = top5Grid().querySelector(`[data-id="${CSS.escape(movieId)}"]`);
+  if (!card || card.classList.contains('eliminating')) return;
+
+  card.classList.add('eliminating');
+  setTimeout(() => {
+    card.remove();
+    top5State.remaining -= 1;
+    updateTop5Counter();
+
+    if (top5State.remaining === 1) {
+      showTop5Winner();
+    }
+  }, 500);
+}
+
+/**
+ * Mark the last remaining card as winner and show the banner.
+ */
+function showTop5Winner() {
+  const grid = top5Grid();
+  const remainingCard = grid.querySelector('.top5-card:not(.eliminating)');
+  if (!remainingCard) return;
+
+  remainingCard.classList.add('winner');
+  // Scroll winner into view
+  remainingCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Find the movie data
+  const winnerData = top5State.current.find(m => m.id === remainingCard.dataset.id);
+
+  // Winner banner
+  const banner = top5WinnerBanner();
+  if (winnerData) {
+    winnerMovieName().textContent = `"${winnerData.title}${winnerData.year ? ` (${winnerData.year})` : ''}"` ;
+    winnerLbLink().href = winnerData.link || '#';
+  }
+  banner.classList.remove('hidden');
+
+  // Counter message
+  top5Counter().innerHTML = '🏆 ¡Tenemos ganadora!';
+
+  // Confetti!
+  launchConfetti();
+}
+
+/**
+ * Update the remaining count display.
+ */
+function updateTop5Counter() {
+  const el = top5Remaining();
+  const counter = top5Counter();
+  if (el) el.textContent = top5State.remaining;
+  if (counter && !counter.textContent.includes('🏆')) {
+    counter.innerHTML = `<span>${top5State.remaining}</span> película(s) restante(s)`;
+  }
+}
+
+// ─── CONFETTI ────────────────────────────────────────────────────────────────
+
+function launchConfetti() {
+  const canvas = top5ConfettiCvs();
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const COLORS = ['#f4a535', '#00c774', '#f97316', '#5b8def', '#e879f9', '#f43f5e'];
+  const particles = Array.from({ length: 120 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height - canvas.height,
+    r: Math.random() * 6 + 3,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    speed: Math.random() * 3 + 1.5,
+    angle: Math.random() * Math.PI * 2,
+    spin:  (Math.random() - 0.5) * 0.2,
+    opacity: 1,
+    shape: Math.random() > 0.5 ? 'rect' : 'circle',
+  }));
+
+  let startTime = null;
+  const DURATION = 5000; // ms
+
+  function draw(ts) {
+    if (!startTime) startTime = ts;
+    const elapsed = ts - startTime;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let alive = false;
+    particles.forEach(p => {
+      p.y += p.speed;
+      p.x += Math.sin(p.angle) * 0.8;
+      p.angle += p.spin;
+      p.opacity = elapsed < DURATION ? 1 : Math.max(0, 1 - (elapsed - DURATION) / 800);
+
+      if (p.y < canvas.height + 20) alive = true;
+      if (p.y > canvas.height + 10) {
+        // reset to top (loop for 5s)
+        if (elapsed < DURATION) {
+          p.y = -10;
+          p.x = Math.random() * canvas.width;
+          p.speed = Math.random() * 3 + 1.5;
+          alive = true;
+        }
+      }
+
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.fillStyle = p.color;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      if (p.shape === 'rect') {
+        ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 1.6);
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+
+    if (alive && elapsed < DURATION + 800) {
+      top5State.confettiAnim = requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      top5State.confettiAnim = null;
+    }
+  }
+
+  stopConfetti();
+  top5State.confettiAnim = requestAnimationFrame(draw);
+}
+
+function stopConfetti() {
+  if (top5State.confettiAnim) {
+    cancelAnimationFrame(top5State.confettiAnim);
+    top5State.confettiAnim = null;
+  }
+  const canvas = top5ConfettiCvs();
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ─── MISC HELPERS ─────────────────────────────────────────────────────────────
+
+/**
+ * Decode basic HTML entities that may appear in og: meta content attributes.
+ */
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g,  '&')
+    .replace(/&lt;/g,   '<')
+    .replace(/&gt;/g,   '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, ' ');
 }
 
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
