@@ -21,17 +21,67 @@
  *   text          → proxy returns raw HTML/text directly
  */
 const PROXIES = [
-  // ── Tier 1: Most reliable ─────────────────────────────────────────────────
-  { url: 'https://api.allorigins.win/get?url=',           mode: 'json-contents' },
-  { url: 'https://api.allorigins.win/raw?url=',           mode: 'text' },
-  // ── Tier 2: Good alternatives ─────────────────────────────────────────────
-  { url: 'https://proxy.cors.sh/',                        mode: 'text' },
-  { url: 'https://api.cors.lol/?url=',                    mode: 'text' },
-  // ── Tier 3: Fallbacks ─────────────────────────────────────────────────────
-  { url: 'https://corsproxy.io/?',                        mode: 'text' },
-  { url: 'https://thingproxy.freeboard.io/fetch/',        mode: 'text' },
-  { url: 'https://corsproxy.org/?',                       mode: 'text' },
+  // ── Local proxy (run `node proxy-server.js`) — zero CORS issues ──────────
+  { url: 'http://localhost:3000/proxy?url=',              mode: 'text' },     // ~50-200ms
+  // ── Public fallbacks for GitHub Pages deployment ──────────────────────────
+  { url: 'https://corsproxy.org/?',                       mode: 'text' },     // ~600ms
+  { url: 'https://api.allorigins.win/raw?url=',           mode: 'text' },     // ~3-6s (flaky)
+  { url: 'https://api.allorigins.win/get?url=',           mode: 'json-contents' }, // backup
+  { url: 'https://cors.sh/?url=',                         mode: 'text' },     // ~1.5s
 ];
+
+// ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
+
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Persistent watchlist cache using localStorage.
+ * Entry: { data: Movie[], ts: number }
+ * Auto-expires after CACHE_TTL_MS. Gracefully degrades if storage is full.
+ */
+const letterboxdCache = {
+  _key(url) {
+    return `lbmatch_v1_${url.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 120)}`;
+  },
+  get(url) {
+    try {
+      const raw = localStorage.getItem(this._key(url));
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_TTL_MS) {
+        localStorage.removeItem(this._key(url));
+        return null;
+      }
+      return data;
+    } catch { return null; }
+  },
+  set(url, data) {
+    try {
+      localStorage.setItem(this._key(url), JSON.stringify({ data, ts: Date.now() }));
+    } catch (e) {
+      console.warn('[Cache] localStorage write failed:', e.message);
+    }
+  },
+  invalidate(url) {
+    try { localStorage.removeItem(this._key(url)); } catch {}
+  },
+  clearAll() {
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('lbmatch_v1_'))
+        .forEach(k => localStorage.removeItem(k));
+    } catch {}
+  },
+};
+
+// ─── PROXY SPEED LOG (in-memory · session only) ───────────────────────────────
+
+/**
+ * Records per-proxy response times for this session.
+ * Inspect via: console.table(window._proxySpeedLog)
+ */
+const _proxySpeedLog = {};
+window._proxySpeedLog = _proxySpeedLog;
 
 /**
  * Films per page Letterboxd uses:
@@ -51,6 +101,7 @@ const state = {
   userCount: 2,
   lastResults: null,
   sortCommonAsc: true,
+  forceRefresh: false,     // true → bypass cache (set via "Forzar actualización" checkbox)
 };
 
 /** State for the Top 5 Eliminator mode */
@@ -248,6 +299,14 @@ function setupEventListeners() {
     if (e.key === 'Enter') handleCompare();
   });
 
+  // Force-refresh checkbox — bypass cache when checked
+  const forceRefreshChk = document.getElementById('chk-force-refresh');
+  if (forceRefreshChk) {
+    forceRefreshChk.addEventListener('change', () => {
+      state.forceRefresh = forceRefreshChk.checked;
+    });
+  }
+
   // Sort common
   btnSortCommon.addEventListener('click', () => {
     state.sortCommonAsc = !state.sortCommonAsc;
@@ -320,6 +379,12 @@ async function handleCompare() {
     const userLabels = inputs.map(input => extractLabel(input));
 
     updateLoadingMessage(`Obteniendo datos de ${inputs.length} lista(s)…`);
+
+    // If forceRefresh is set, evict cached entries before fetching
+    if (state.forceRefresh) {
+      pageUrls.forEach(url => letterboxdCache.invalidate(url));
+      console.log('[Cache] Force refresh — invalidated', pageUrls.length, 'entries');
+    }
 
     const results = await Promise.allSettled(pageUrls.map((url, i) =>
       fetchAndParseList(url, userLabels[i])
@@ -403,99 +468,72 @@ function extractLabel(input) {
  * Handles pagination automatically: fetches /page/1/, /page/2/, … until empty.
  */
 /**
- * Fetch all pages of a Letterboxd watchlist or list via CORS proxies.
+ * Fetch all pages of a Letterboxd watchlist or list.
  *
- * Strategy:
- *   1. For each page, try all proxies in order until one succeeds.
- *   2. Parse the HTML with parseHtmlFilmPosters().
- *   3. If a page returns fewer films than expected, it's the last page.
- *   4. Watchlist pages have 28 films each; list pages can have up to 100.
- *      We detect the per-page count from the first page and use it as threshold.
+ * Strategy (v2 — with cache + proxy racing):
+ *   1. Check localStorage cache first (TTL: 30 min). If hit, return instantly.
+ *   2. For each page, race ALL proxies in parallel via fetchViaFastestProxy().
+ *      The first proxy to respond wins (~2-5 s vs up to 56 s sequentially).
+ *   3. Parse HTML with parseHtmlFilmPosters().
+ *   4. Paginate until an empty page or fewer-than-full-page response.
+ *   5. On success, persist to cache.
  */
 async function fetchAndParseList(baseUrl, label) {
-  const errors = [];
+  // ── Cache lookup ────────────────────────────────────────────────────────────
+  const cached = letterboxdCache.get(baseUrl);
+  if (cached) {
+    console.log(`[Cache] ⚡ Hit for "${label}" (${cached.length} films)`);
+    updateLoadingMessage(`⚡ "${label}" cargado desde caché (${cached.length} películas)`);
+    await sleep(200); // brief pause so user sees the message
+    return cached;
+  }
+
   const allMovies = [];
   let page = 1;
   let hasMore = true;
-  let perPage = null; // auto-detected after first successful page
+  let perPage = null;
 
-  while (hasMore && page <= 30) { // max 30 pages = up to ~2100 films (generous cap)
+  while (hasMore && page <= 30) {
     const pageUrl = page === 1 ? baseUrl : `${baseUrl}page/${page}/`;
-    let html = null;
-
     updateLoadingMessage(`Obteniendo datos de "${label}" — página ${page}…`);
 
-    // Try each proxy in sequence
-    for (const proxy of PROXIES) {
-      try {
-        const proxyUrl = `${proxy.url}${encodeURIComponent(pageUrl)}`;
-        console.log(`[${label}] p${page} via ${proxy.url}`);
-        const resp = await fetchWithTimeout(proxyUrl, 25000);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        if (proxy.mode === 'json-contents') {
-          const data = await resp.json();
-          if (!data.contents) throw new Error('Empty contents from proxy');
-          html = data.contents;
-        } else {
-          html = await resp.text();
-        }
-
-        // Sanity-check: make sure we got actual Letterboxd HTML and not a proxy error
-        if (!html || html.trim().length < 500) throw new Error('Response too short — likely a proxy error page');
-        if (!html.includes('letterboxd') && !html.includes('griditem') && !html.includes('film')) {
-          throw new Error('Response does not look like Letterboxd HTML');
-        }
-        console.log(`[${label}] p${page} ✅ ${html.length} chars via ${proxy.url}`);
-        break; // success — stop trying proxies
-      } catch (err) {
-        console.warn(`[${label}] p${page} proxy ${proxy.url} failed: ${err.message}`);
-        errors.push(`p${page}@${proxy.url.split('/')[2]}: ${err.message}`);
-        html = null;
-      }
-    }
-
-    if (!html) {
+    let html;
+    try {
+      html = await fetchViaFastestProxy(pageUrl);
+    } catch (err) {
       if (page === 1) {
-        // All proxies failed on the first page — this is a fatal error
         throw new Error(
           `No se pudo acceder a "${label}".\n` +
           `Verificá que la URL sea correcta y que la lista/watchlist sea pública.\n` +
-          `Probamos ${PROXIES.length} proxies CORS y todos fallaron:\n` +
-          `${errors.slice(-PROXIES.length).map(e => `  • ${e}`).join('\n')}\n\n` +
-          `💡 Si usás Opera GX, Brave u otro navegador con bloqueador de anuncios integrado, ` +
-          `probá desactivar el bloqueador para esta página (ícono de escudo en la barra de direcciones).`
+          err.message
         );
       }
-      // Subsequent page failed — assume we've reached the end
-      console.warn(`[${label}] p${page} all proxies failed, stopping pagination.`);
+      console.warn(`[${label}] p${page} all proxies failed — stopping pagination.`);
       break;
     }
 
+    // Sanity-check: confirm it's Letterboxd HTML
+    if (!html.includes('letterboxd') && !html.includes('griditem') && !html.includes('film')) {
+      if (page === 1) throw new Error(`La respuesta no parece HTML de Letterboxd para "${label}".`);
+      break;
+    }
+
+    console.log(`[${label}] p${page} ✅ ${html.length} chars`);
     const movies = parseHtmlFilmPosters(html, label);
 
     if (movies.length === 0) {
-      // Empty page means we've gone past the last page
       hasMore = false;
     } else {
       allMovies.push(...movies);
 
-      // Auto-detect items per page from the first page result.
-      // Letterboxd watchlists show 28 per page; custom lists can show up to 100.
       if (perPage === null) {
-        // Snap to the nearest expected page size
-        if (movies.length <= 28) {
-          perPage = FILMS_PER_PAGE_WATCHLIST;
-        } else if (movies.length <= 72) {
-          perPage = 72;
-        } else {
-          perPage = movies.length; // very large list page — use as-is
-        }
+        if (movies.length <= 28)      perPage = FILMS_PER_PAGE_WATCHLIST;
+        else if (movies.length <= 72) perPage = 72;
+        else                          perPage = movies.length;
         console.log(`[${label}] Auto-detected perPage = ${perPage} (got ${movies.length} on p1)`);
       }
 
       if (movies.length < perPage) {
-        // Fewer items than a full page → this was the last page
         hasMore = false;
       } else {
         page++;
@@ -508,18 +546,28 @@ async function fetchAndParseList(baseUrl, label) {
   }
 
   console.log(`[${label}] Total: ${allMovies.length} películas en ${page} página(s)`);
+
+  // ── Persist to cache (only if we got actual data) ────────────────────────────
+  if (allMovies.length > 0) {
+    letterboxdCache.set(baseUrl, allMovies);
+    console.log(`[Cache] 💾 Saved "${label}" (${allMovies.length} films, TTL: 30 min)`);
+  }
+
   return allMovies;
 }
 
 /**
  * Fetch with timeout using Promise.race().
  *
+ * Timeout reduced to 8 s (was 25 s) because we now race ALL proxies in
+ * parallel — a proxy that doesn't answer in 8 s is effectively dead and
+ * we don't need to wait for it when faster alternatives are competing.
+ *
  * We avoid AbortController because some browsers (Opera GX, older Safari)
- * report "signal is aborted without reason" even for valid requests when
- * their built-in tracker blocker interferes with the AbortController signal.
- * Promise.race() is universally supported and avoids this issue.
+ * report "signal is aborted without reason" when their tracker blocker
+ * interferes with AbortController signals.
  */
-function fetchWithTimeout(url, timeout = 25000) {
+function fetchWithTimeout(url, timeout = 8000) {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`Timeout after ${timeout}ms`)), timeout)
   );
@@ -531,6 +579,58 @@ function fetchWithTimeout(url, timeout = 25000) {
     }),
     timeoutPromise,
   ]);
+}
+
+/**
+ * Race ALL proxies in parallel and resolve with the FIRST valid HTML response.
+ *
+ * This replaces the old sequential for-loop approach:
+ *   Sequential (old): N × timeout = up to 8 × 8 s = 64 s worst case
+ *   Racing    (new): resolves in ~2–5 s — fastest proxy always wins
+ *
+ * Uses Promise.any() which:
+ *   - Resolves as soon as ANY promise resolves
+ *   - Rejects only when ALL promises reject (AggregateError)
+ */
+async function fetchViaFastestProxy(targetUrl, timeout = 8000) {
+  const proxyAttempts = PROXIES.map(async (proxy) => {
+    const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
+    const t0 = Date.now();
+
+    const resp = await fetchWithTimeout(proxyUrl, timeout);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    let html;
+    if (proxy.mode === 'json-contents') {
+      const data = await resp.json();
+      if (!data.contents) throw new Error('Empty contents');
+      html = data.contents;
+    } else {
+      html = await resp.text();
+    }
+
+    if (!html || html.trim().length < 500) throw new Error('Response too short');
+
+    // Record speed for DevTools debugging: console.table(window._proxySpeedLog)
+    const elapsed = Date.now() - t0;
+    const host = proxy.url.split('/')[2];
+    if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
+    _proxySpeedLog[host].push(elapsed);
+    console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
+
+    return html;
+  });
+
+  try {
+    // Promise.any: first fulfillment wins; throws AggregateError only if all reject
+    return await Promise.any(proxyAttempts);
+  } catch {
+    throw new Error(
+      `Todos los proxies CORS fallaron para esta petición.\n` +
+      `💡 Si usás Opera GX, Brave u otro navegador con bloqueador integrado, ` +
+      `desactivá el bloqueador para esta página (ícono de escudo en la barra de direcciones).`
+    );
+  }
 }
 
 /**
@@ -619,14 +719,66 @@ function parseHtmlFilmPosters(html, label) {
       if (ym) year = ym[1];
     }
 
-    // ── Poster image ──────────────────────────────────────────────────────────
+    // ── Poster image ─────────────────────────────────────────────────────────
+    // Letterboxd uses React lazy-loading: img[src] starts as a 35×50 placeholder.
+    // The real high-res URL is in: srcset, data-srcset, data-src, or <noscript>.
+    let poster = null;
+
     const img = el.querySelector('img');
-    let poster = img?.getAttribute('src') || img?.getAttribute('data-src') || null;
+    if (img) {
+      // 1. srcset / data-srcset — pick the last (= highest resolution) entry
+      const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset') || '';
+      if (srcset) {
+        const parts = srcset.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
+        if (parts.length) poster = parts[parts.length - 1];
+      }
+      // 2. data-src on the img element
+      if (!poster || poster.includes('35x50') || poster.includes('empty')) {
+        poster = img.getAttribute('data-src') || null;
+      }
+      // 3. src — only if it's not the placeholder
+      if (!poster || poster.includes('35x50') || poster.includes('empty') || poster.startsWith('data:')) {
+        const src = img.getAttribute('src') || '';
+        poster = (!src.includes('35x50') && !src.includes('empty') && !src.startsWith('data:') && src) ? src : null;
+      }
+    }
+
+    // 4. <noscript> fallback — Letterboxd always puts the real <img> inside <noscript>
+    //    for search-engine crawlers. This is the most reliable source.
+    if (!poster) {
+      const noscript = el.querySelector('noscript');
+      if (noscript) {
+        const nsContent = noscript.textContent || noscript.innerHTML || '';
+        // Try srcset first (highest res)
+        const srcsetM = nsContent.match(/srcset=["']([^"']+)["']/i);
+        if (srcsetM) {
+          const parts = srcsetM[1].split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
+          if (parts.length) poster = parts[parts.length - 1];
+        }
+        // Fallback to src
+        if (!poster || poster.includes('35x50') || poster.includes('empty')) {
+          const srcM = nsContent.match(/\ssrc=["']([^"']+)["']/i);
+          if (srcM && !srcM[1].includes('35x50') && !srcM[1].includes('empty')) {
+            poster = srcM[1];
+          }
+        }
+      }
+    }
+
+    // 5. data-src / data-poster on the container element itself
+    if (!poster) {
+      const elSrc = el.getAttribute('data-src') || el.getAttribute('data-poster') || '';
+      if (elSrc && !elSrc.includes('35x50') && !elSrc.includes('empty') && !elSrc.startsWith('data:')) {
+        poster = elSrc;
+      }
+    }
+
+    // Final sanitization — reject obvious non-poster URLs
     if (poster && (
       poster.includes('empty.png') ||
       poster.includes('avatar') ||
       poster.startsWith('data:') ||
-      poster.includes('35x50') // Letterboxd tiny placeholder
+      poster.includes('35x50')
     )) {
       poster = null;
     }
@@ -877,6 +1029,25 @@ function switchTab(index) {
   });
 }
 
+// ─── POSTER FALLBACK HELPER ──────────────────────────────────────────────────
+
+/**
+ * Called by img[onerror] when a poster URL fails to load.
+ * Hides the broken image and inserts a styled SVG placeholder instead.
+ */
+function posterFallback(imgEl) {
+  imgEl.style.display = 'none';
+  const placeholder = document.createElement('div');
+  placeholder.className = imgEl.dataset.placeholderClass || 'movie-poster-placeholder';
+  placeholder.innerHTML = `
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="2" width="20" height="20" rx="3"/>
+      <path d="M8 10l8 0M8 14l4 0"/>
+    </svg>
+    <span>Sin póster</span>`;
+  imgEl.parentNode.insertBefore(placeholder, imgEl.nextSibling);
+}
+
 // ─── MOVIE CARD ───────────────────────────────────────────────────────────────
 
 function createMovieCard(movie, index, isCommon) {
@@ -1033,53 +1204,74 @@ async function initTop5(pool) {
 async function enrichMovieMeta(movie) {
   const result = { poster: movie.poster || null, description: movie.description || '', rating: null };
   try {
-    let html = null;
-    for (const proxy of PROXIES) {
-      try {
-        const proxyUrl = `${proxy.url}${encodeURIComponent(movie.link)}`;
-        const resp = await fetchWithTimeout(proxyUrl, 20000);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        if (proxy.mode === 'json-contents') {
-          const data = await resp.json();
-          if (!data.contents) throw new Error('Empty contents');
-          html = data.contents;
-        } else {
-          html = await resp.text();
-        }
-        if (!html || html.trim().length < 500) throw new Error('Response too short');
-        break;
-      } catch { html = null; }
+    // ── Fetch film page via fastest available proxy ────────────────────────────
+    let html;
+    try {
+      html = await fetchViaFastestProxy(movie.link);
+    } catch {
+      return result; // all proxies failed — return whatever we already have
     }
 
     if (!html) return result;
 
-    // ── og:image → real poster ──────────────────────────────────────────────
-    const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-    if (ogImageMatch && ogImageMatch[1]) {
+    // ── og:image → high-res poster ───────────────────────────────────────────
+    // Robust regex: tolerates any attribute order (property/content either first)
+    const ogImageMatch =
+      html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/i) ||
+      html.match(/name=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    if (ogImageMatch?.[1]) {
       const imgUrl = ogImageMatch[1];
-      if (!imgUrl.includes('empty') && !imgUrl.startsWith('data:')) {
+      if (!imgUrl.includes('empty') && !imgUrl.startsWith('data:') && !imgUrl.includes('35x50')) {
         result.poster = imgUrl;
       }
     }
 
-    // ── og:description → synopsis ──────────────────────────────────────────
+    // ── og:description → synopsis ─────────────────────────────────────────────
     if (!result.description) {
-      const ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-      if (ogDescMatch && ogDescMatch[1]) {
+      const ogDescMatch =
+        html.match(/property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+        html.match(/content=["']([^"']+)["'][^>]*property=["']og:description["']/i) ||
+        html.match(/name=["']description["'][^>]*content=["']([^"']+)["']/i);
+      if (ogDescMatch?.[1]) {
         result.description = decodeHtmlEntities(ogDescMatch[1].trim());
       }
     }
 
-    // ── Average rating ─────────────────────────────────────────────────────
-    // Letterboxd renders: <a class="display-rating" ...>3.8</a>
-    // or <meta itemprop="ratingValue" content="3.8">
-    const ratingMatch = html.match(/itemprop=["']ratingValue["'][^>]+content=["']([\d.]+)["']/i)
-                      || html.match(/class=["'][^"']*display-rating[^"']*["'][^>]*>([\d.]+)/i);
-    if (ratingMatch && ratingMatch[1]) {
+    // ── Average rating — Method 1: itemprop ratingValue ───────────────────────
+    // Tolerates any order: itemprop first or content first
+    const ratingMatch =
+      html.match(/itemprop=["']ratingValue["'][^>]*content=["']([\d.]+)["']/i) ||
+      html.match(/content=["']([\d.]+)["'][^>]*itemprop=["']ratingValue["']/i) ||
+      html.match(/class=["'][^"']*display-rating[^"']*["'][^>]*>([\d.]+)/i);
+    if (ratingMatch?.[1]) {
       const raw = parseFloat(ratingMatch[1]);
       if (!isNaN(raw) && raw >= 0) result.rating = raw;
+    }
+
+    // ── Average rating — Method 2: JSON-LD schema.org AggregateRating ────────
+    // Letterboxd includes structured data in <script type="application/ld+json">
+    if (result.rating === null) {
+      const ldScripts = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+      for (const match of ldScripts) {
+        try {
+          const json = JSON.parse(match[1]);
+          const ratingVal =
+            json?.aggregateRating?.ratingValue ??
+            (Array.isArray(json?.['@graph'])
+              ? json['@graph'].find(n => n?.aggregateRating)?.aggregateRating?.ratingValue
+              : undefined);
+          if (ratingVal != null) {
+            result.rating = parseFloat(ratingVal);
+            break;
+          }
+        } catch { /* malformed JSON-LD — skip */ }
+      }
+    }
+
+    // ── Fallback description ──────────────────────────────────────────────────
+    if (!result.description) {
+      result.description = 'Sinopsis no disponible en Letterboxd';
     }
 
   } catch (err) {

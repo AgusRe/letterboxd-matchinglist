@@ -279,6 +279,33 @@ main.container { padding-top: 48px; padding-bottom: 80px; }
   background: var(--bg-hover);
 }
 
+/* ── FORCE REFRESH ROW ── */
+.force-refresh-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: .78rem;
+  user-select: none;
+  transition: color var(--transition);
+}
+.force-refresh-row:hover { color: var(--text-secondary); }
+.force-refresh-row input[type="checkbox"] {
+  accent-color: var(--accent-orange);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.force-refresh-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.force-refresh-row small { opacity: .7; }
+
 .btn-icon {
   width: 34px;
   height: 34px;
