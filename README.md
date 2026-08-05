@@ -1,8 +1,8 @@
-# 🎬 Letterboxd Match
+﻿# 🎬 Letterboxd Match
 
 > **Descubrí qué películas tienen en común tus amigos en Letterboxd** — sin registrarte, sin API key, sin servidor.
 
-**[🌐 Ver demo en vivo →](https://agusboom.github.io/letterboxd-matchinglist/)**
+**[🌐 Ver demo en vivo →](https://agusre.github.io/letterboxd-matchinglist/)**
 
 ---
 
