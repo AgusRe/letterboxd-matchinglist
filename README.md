@@ -6,10 +6,27 @@
 
 ---
 
+## 🆕 Novedades — v2.1
+
+### 🖼️ Pósters, sinopsis y rating en TODAS las secciones
+Antes el enriquecimiento (póster real, sinopsis, calificación) solo pasaba en el modo Top 5 Eliminator. Ahora:
+- El grid de **Películas en Común** carga los pósters reales automáticamente al renderizarse.
+- Las pestañas de **Películas Únicas por Usuario** enriquecen sus pósters de forma *lazy* — la pestaña visible al entrar se carga sola, y el resto recién dispara el fetch cuando el usuario hace clic en ellas (evita saturar los proxies con fetches innecesarios).
+- El **modal de detalle** (al hacer clic en cualquier película) ahora también trae póster, sinopsis y calificación en estrellas, con un estado de carga mientras llegan los datos.
+- Todo comparte un mismo caché en `localStorage` (24 h de TTL) — si una película ya se enriqueció en el grid, el modal la muestra al instante sin volver a pedirle nada a Letterboxd.
+
+### 🪟 Modal más grande
+El modal de detalle de película ahora ocupa gran parte de la pantalla (antes era chico y obligaba a hacer zoom para leer bien). Póster, título, sinopsis y rating con tipografía más grande y legible.
+
+### 🔧 Cadena de proxies CORS depurada
+Se sacaron proxies que dejaron de funcionar (`corsproxy.org`, `cors.sh`, `thingproxy.freeboard.io` — ya no resuelven o no envían headers CORS) y quedaron solo los que efectivamente responden hoy: el proxy local (`proxy-server.js`, recomendado para desarrollo) + `api.allorigins.win` + `api.codetabs.com` como fallback público para producción (GitHub Pages).
+
+---
+
 ## 🆕 Novedades — v2.0
 
 ### 🖼️ Pósters reales con enriquecimiento on-demand
-Las películas ahora muestran su portada oficial de alta resolución en el modo Top 5. La extracción se realiza al vuelo consultando el `og:image` de la página individual de cada film en Letterboxd — sin API key, vía el mismo pipeline de proxies CORS.
+Las películas muestran su portada oficial de alta resolución. La extracción se realiza al vuelo consultando el `og:image` de la página individual de cada film en Letterboxd — sin API key, vía el mismo pipeline de proxies CORS.
 
 ### 🎲 Nuevo modo: Top 5 Eliminator
 Una herramienta interactiva de decisión grupal. Una vez que tenés resultados, hacé clic en **🎲 Top 5 Eliminator** en la barra de estadísticas para entrar al modo de eliminación:
@@ -34,10 +51,11 @@ Ideal para cuando un grupo de amigos quiere decidir qué película ver juntos: e
 | 📋 **Dos modos** | Watchlist personal o Lista específica pública |
 | 🎞️ **Paginación completa** | Extrae **todas** las páginas, no solo las primeras 28 |
 | 🌐 **Sin API key** | Usa proxies CORS + scraping HTML público |
-| 🖼️ **Pósters reales** | Extracción on-demand via `og:image` de la página del film |
+| 🖼️ **Pósters, sinopsis y rating reales** | Enriquecimiento on-demand vía `og:image` / `og:description` / `ratingValue` — en el grid común, en únicas por usuario, en el modal de detalle y en el Top 5 |
 | 🎲 **Top 5 Eliminator** | Modo de decisión grupal con eliminación interactiva y confetti |
 | 📊 **Películas únicas** | Muestra lo exclusivo de cada usuario en pestañas |
-| 💯 **100% estático** | Sin backend, sin build step, desplegable en GitHub Pages |
+| 💾 **Caché inteligente** | Listas (30 min) y metadata de films (24 h) cacheadas en `localStorage` |
+| 💯 **100% estático** | Sin backend obligatorio, sin build step, desplegable en GitHub Pages |
 
 ---
 
@@ -45,14 +63,14 @@ Ideal para cuando un grupo de amigos quiere decidir qué película ver juntos: e
 
 1. **Comparar listas**: Ingresá las URLs de watchlist/lista de al menos 2 usuarios y hacé clic en "Comparar Listas".
 2. **Abrir el modo**: En la barra de estadísticas de resultados, hacé clic en el botón **🎲 Top 5 Eliminator**.
-3. **Esperar el enrichment**: La app carga los pósters, sinopsis y calificaciones de las 5 películas seleccionadas al azar (~3-5 segundos).
+3. **Esperar el enrichment**: La app carga los pósters, sinopsis y calificaciones de las 5 películas seleccionadas al azar (~3-5 segundos, o instantáneo si ya estaban en caché).
 4. **Jugar**:
    - Pasá el mouse sobre cada póster para ver la **sinopsis** y las **★ estrellas**.
    - Hacé clic en la **× flotante** (esquina superior derecha de la tarjeta) para eliminar una película.
    - Repetí hasta quedar con 1 ganadora.
 5. **Reiniciar**: Usá el botón "↺ Otras 5" para generar un nuevo lote aleatorio.
 
-> **Tip:** Si hay menos de 5 películas en común, el modo usa todas las disponibles.
+> **Nota:** Si hay menos de 5 películas en común, el modo usa todas las disponibles.
 
 ---
 
@@ -71,7 +89,7 @@ Usuario ingresa URL de Letterboxd
         ↓
 App construye URLs de paginación (/page/1/, /page/2/, …)
         ↓
-Solicitud enviada a un CORS proxy (AllOrigins / corsproxy.io / thingproxy)
+Solicitud enviada a un CORS proxy (proxy local / AllOrigins / codetabs)
         ↓  [el proxy hace la petición al servidor de Letterboxd por nosotros]
 HTML de la página de lista/watchlist devuelto como texto
         ↓
@@ -85,11 +103,11 @@ Lista de objetos { id (slug), title, year, poster, link }
         ↓
 Algoritmo de intersección → películas en común + únicas por usuario
         ↓
-Render de tarjetas con título, año y link directo a Letterboxd
+Render de tarjetas con título y año
 
-        ── Top 5 Eliminator (on-demand enrichment) ──
+        ── Enriquecimiento on-demand (grid común, únicas, modal, Top 5) ──
         ↓
-Para cada una de las 5 películas seleccionadas:
+Para cada película que aún no tiene póster/sinopsis/rating en caché:
   fetch /film/{slug}/ via proxy CORS
         ↓
   Extracción de metadatos adicionales:
@@ -97,7 +115,7 @@ Para cada una de las 5 películas seleccionadas:
     • <meta property="og:description"> → Sinopsis de la película
     • <meta itemprop="ratingValue">   → Calificación promedio (0–5)
         ↓
-Render de tarjetas enriquecidas con póster + sinopsis + ★ estrellas
+Se guarda en localStorage (24 h) y se actualiza la tarjeta / modal in-place
 ```
 
 ### Por qué se necesita un CORS proxy
@@ -106,15 +124,13 @@ Los navegadores aplican la **Same-Origin Policy**: una página web no puede hace
 
 ### Cadena de proxies (con fallback automático)
 
-La app prueba los proxies **en orden**, pasando al siguiente si uno falla:
+La app **corre en paralelo** los proxies disponibles y se queda con el primero que responde (`Promise.any`):
 
-1. `api.allorigins.win/get?url=` — devuelve JSON con el HTML en `.contents`
-2. `api.allorigins.win/raw?url=` — devuelve HTML crudo
-3. `proxy.cors.sh/` — alternativa confiable
-4. `api.cors.lol/?url=` — buena alternativa
-5. `corsproxy.io/?` — fallback nivel 3
-6. `thingproxy.freeboard.io/fetch/` — fallback nivel 4
-7. `corsproxy.org/?` — fallback final
+1. `http://localhost:3000/proxy?url=` — proxy local (`proxy-server.js`), **solo se usa en desarrollo local**, cero problemas de CORS porque el fetch lo hace Node server-side.
+2. `api.allorigins.win/raw?url=` — fallback público para producción (GitHub Pages).
+3. `api.codetabs.com/v1/proxy?quest=` — segundo fallback público.
+
+> Se sacaron de la lista `corsproxy.org`, `cors.sh` y `thingproxy.freeboard.io`: dejaron de enviar cabeceras CORS válidas (los dos primeros) o el dominio directamente dejó de resolver (`ERR_NAME_NOT_RESOLVED` en el caso de thingproxy). Si en el futuro alguno de los proxies actuales deja de andar, revisar `PROXIES` en `app.js` y reemplazarlo por una alternativa vigente.
 
 ### Normalización de IDs
 
@@ -128,19 +144,21 @@ Letterboxd muestra **28 películas por página** en watchlists. La app detecta a
 
 ## 🖥️ Desarrollo local
 
-No necesitás ningún servidor especial, pero sí un servidor HTTP local para evitar restricciones CORS del navegador con archivos `file://`:
+**Importante:** para desarrollo local se recomienda usar el proxy propio del proyecto, no un servidor estático genérico. Corré:
 
 ```bash
-# Con Python 3 (más fácil, sin instalación extra)
-python -m http.server 8080
-
-# Con Node.js
-npx serve .
-
-# Con VS Code: instalá "Live Server" y hacé clic en "Go Live"
+node proxy-server.js
 ```
 
-Abrí `http://localhost:8080` en tu navegador.
+Esto levanta un único servidor en `http://localhost:3000` que:
+- Sirve los archivos estáticos de la app (`index.html`, `app.js`, `style.css`).
+- Expone el endpoint `/proxy?url=...`, que hace el fetch a Letterboxd **server-side** (sin problemas de CORS, sin depender de servicios de terceros ni rate limits ajenos).
+
+Abrí `http://localhost:3000` en tu navegador.
+
+> ⚠️ **No uses `npx serve .` ni `python -m http.server`** para desarrollo de esta app: son servidores estáticos genéricos que no conocen la ruta `/proxy`, y vas a ver errores 404 en la consola apenas la app intente pedir datos a Letterboxd. Esos comandos sirven solo para ver el HTML/CSS estático, no para probar la app funcionando de punta a punta.
+
+Alternativa si por algún motivo no podés correr Node: la app también cae automáticamente en los proxies públicos (`allorigins.win`, `codetabs.com`) si `localhost:3000/proxy` no responde — pero son más lentos y menos confiables que el proxy propio.
 
 ---
 
@@ -148,10 +166,11 @@ Abrí `http://localhost:8080` en tu navegador.
 
 ```
 letterboxd-matchinglist/
-├── index.html    ← Estructura HTML semántica + SEO metadata + overlay Top 5
-├── style.css     ← Tema dark, variables CSS, grid responsivo, animaciones + estilos Top 5
-├── app.js        ← Fetch, parse, comparación, render, modal + Top 5 Eliminator + enrichMovieMeta
-└── README.md     ← Esta documentación
+├── index.html       ← Estructura HTML semántica + SEO metadata + overlay Top 5
+├── style.css         ← Tema dark, variables CSS, grid responsivo, animaciones + estilos Top 5 + modal
+├── app.js            ← Fetch, parse, comparación, render, modal + Top 5 Eliminator + enrichMovieMeta
+├── proxy-server.js   ← Proxy CORS local para desarrollo (recomendado: `node proxy-server.js`)
+└── README.md         ← Esta documentación
 ```
 
 ---
@@ -159,10 +178,9 @@ letterboxd-matchinglist/
 ## ⚠️ Limitaciones conocidas
 
 - **Listas privadas** no son accesibles — Letterboxd no expone contenido privado.
-- **Disponibilidad del proxy** — Si los servicios de terceros están caídos, la carga puede tardar más. La app tiene fallback automático entre 7 proxies.
-- **Pósters (grid principal)** — Letterboxd carga las imágenes vía JavaScript diferido. El HTML estático devuelve placeholders en la lista/watchlist. Los pósters reales se obtienen solo en el modo Top 5 Eliminator (enrichment on-demand por film).
-- **Top 5 — latencia de enrichment** — Cada una de las 5 películas requiere 1 fetch adicional. En paralelo, el proceso tarda ~3-5 segundos según la velocidad del proxy. Si el proxy falla, la tarjeta muestra "Sinopsis no disponible" y usa el placeholder de póster, sin romper la UI.
-- **Rate limiting** — Si consultás muchas URLs seguidas, algún proxy puede retornar error 429. Esperá unos segundos y reintentá.
+- **Disponibilidad del proxy** — En producción (GitHub Pages) se depende de proxies públicos de terceros; si están caídos o rate-limiteados, la carga puede tardar más o fallar parcialmente. En desarrollo local esto se evita corriendo `node proxy-server.js`.
+- **Enriquecimiento (póster/sinopsis/rating)** — Cada película que no tenía esos datos en la lista original requiere 1 fetch adicional a su página individual. Se resuelve con concurrencia limitada (3 en simultáneo) para no saturar los proxies, y se cachea 24 h en `localStorage` para no repetir el trabajo. Si el proxy falla para una película puntual, esa tarjeta se queda con "Sin póster" / sin romper el resto de la UI.
+- **Rate limiting** — Si consultás muchas URLs seguidas contra los proxies públicos, alguno puede retornar error 429/520. Esperá unos segundos y reintentá, o usá el proxy local.
 
 ---
 
@@ -174,8 +192,8 @@ letterboxd-matchinglist/
 | Estilos | CSS3 puro — Variables, Grid, Flexbox, Canvas, animaciones |
 | Lógica | Vanilla JavaScript (ES2020+) |
 | Fuente de datos | Scraping HTML público de Letterboxd |
-| Metadatos enriquecidos | Extracción `og:image` + `og:description` + `itemprop:ratingValue` |
-| CORS bypass | AllOrigins · cors.sh · cors.lol · corsproxy.io · thingproxy (cadena de fallback) |
+| Metadatos enriquecidos | Extracción `og:image` + `og:description` + `itemprop:ratingValue`, cacheados en `localStorage` |
+| CORS bypass | Proxy local (`proxy-server.js`, Node) + AllOrigins + codetabs (fallback público) |
 | Confetti | Canvas 2D API (vanilla, sin librerías) |
 | Deploy | GitHub Pages (estático, sin build) |
 
@@ -188,5 +206,3 @@ MIT — libre uso, modificación y distribución.
 ---
 
 *Hecho con ❤️ para cinéfilos · Los datos son públicos de [Letterboxd](https://letterboxd.com)*
-
-

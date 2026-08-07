@@ -20,14 +20,14 @@
  *   json-contents → proxy returns JSON { contents: "<html>…" }
  *   text          → proxy returns raw HTML/text directly
  */
+const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
 const PROXIES = [
-  // ── Local proxy (run `node proxy-server.js`) — zero CORS issues ──────────
-  { url: 'http://localhost:3000/proxy?url=',              mode: 'text' },     // ~50-200ms
-  // ── Public fallbacks for GitHub Pages deployment ──────────────────────────
-  { url: 'https://corsproxy.org/?',                       mode: 'text' },     // ~600ms
-  { url: 'https://api.allorigins.win/raw?url=',           mode: 'text' },     // ~3-6s (flaky)
-  { url: 'https://api.allorigins.win/get?url=',           mode: 'json-contents' }, // backup
-  { url: 'https://cors.sh/?url=',                         mode: 'text' },     // ~1.5s
+  // Solo se usa en desarrollo local (node proxy-server.js)
+  ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text' }] : []),
+  // Únicos proxies públicos verificados como funcionales hoy
+  { url: 'https://api.allorigins.win/raw?url=', mode: 'text' },
+  { url: 'https://api.codetabs.com/v1/proxy?quest=', mode: 'text'}
 ];
 
 // ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
@@ -63,14 +63,14 @@ const letterboxdCache = {
     }
   },
   invalidate(url) {
-    try { localStorage.removeItem(this._key(url)); } catch {}
+    try { localStorage.removeItem(this._key(url)); } catch { }
   },
   clearAll() {
     try {
       Object.keys(localStorage)
         .filter(k => k.startsWith('lbmatch_v1_'))
         .forEach(k => localStorage.removeItem(k));
-    } catch {}
+    } catch { }
   },
 };
 
@@ -90,7 +90,7 @@ window._proxySpeedLog = _proxySpeedLog;
  * We use 28 as the conservative threshold; if a page has >= 28 items we try next page.
  */
 const FILMS_PER_PAGE_WATCHLIST = 28;
-const FILMS_PER_PAGE_LIST      = 72;
+const FILMS_PER_PAGE_LIST = 72;
 const MAX_USERS = 5;
 const MIN_USERS = 2;
 
@@ -117,35 +117,35 @@ const top5State = {
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
-const usersContainer   = $('#users-container');
-const btnAddUser       = $('#btn-add-user');
-const btnCompare       = $('#btn-compare');
-const errorBanner      = $('#error-banner');
-const loadingSection   = $('#loading-section');
-const loadingMessage   = $('#loading-message');
-const resultsSection   = $('#results-section');
-const statsBar         = $('#stats-bar');
-const commonGrid       = $('#common-grid');
-const commonCount      = $('#common-count');
-const commonEmpty      = $('#common-empty');
-const uniqueTabs       = $('#unique-tabs');
-const uniquePanels     = $('#unique-panels');
-const movieModal       = $('#movie-modal');
-const modalContent     = $('#modal-content');
-const modalCloseBtn    = $('#modal-close-btn');
-const btnSortCommon    = $('#btn-sort-common');
+const usersContainer = $('#users-container');
+const btnAddUser = $('#btn-add-user');
+const btnCompare = $('#btn-compare');
+const errorBanner = $('#error-banner');
+const loadingSection = $('#loading-section');
+const loadingMessage = $('#loading-message');
+const resultsSection = $('#results-section');
+const statsBar = $('#stats-bar');
+const commonGrid = $('#common-grid');
+const commonCount = $('#common-count');
+const commonEmpty = $('#common-empty');
+const uniqueTabs = $('#unique-tabs');
+const uniquePanels = $('#unique-panels');
+const movieModal = $('#movie-modal');
+const modalContent = $('#modal-content');
+const modalCloseBtn = $('#modal-close-btn');
+const btnSortCommon = $('#btn-sort-common');
 
 // ── Top 5 Eliminator DOM refs (resolved lazily so they exist after HTML parse) ──
-const top5Overlay      = () => $('#top5-overlay');
-const top5Grid         = () => $('#top5-grid');
-const top5Loading      = () => $('#top5-loading');
-const top5LoadingMsg   = () => $('#top5-loading-msg');
-const top5Counter      = () => $('#top5-counter');
-const top5Remaining    = () => $('#top5-remaining');
+const top5Overlay = () => $('#top5-overlay');
+const top5Grid = () => $('#top5-grid');
+const top5Loading = () => $('#top5-loading');
+const top5LoadingMsg = () => $('#top5-loading-msg');
+const top5Counter = () => $('#top5-counter');
+const top5Remaining = () => $('#top5-remaining');
 const top5WinnerBanner = () => $('#top5-winner-banner');
-const top5ConfettiCvs  = () => $('#top5-confetti');
-const winnerMovieName  = () => $('#winner-movie-name');
-const winnerLbLink     = () => $('#winner-lb-link');
+const top5ConfettiCvs = () => $('#top5-confetti');
+const winnerMovieName = () => $('#winner-movie-name');
+const winnerLbLink = () => $('#winner-lb-link');
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
@@ -386,8 +386,11 @@ async function handleCompare() {
       console.log('[Cache] Force refresh — invalidated', pageUrls.length, 'entries');
     }
 
+    // Escalonamos el arranque de cada usuario (400ms entre uno y otro) para no
+    // saturar de golpe al único proxy CORS confiable (allorigins.win) cuando
+    // hay varios usuarios en la comparación.
     const results = await Promise.allSettled(pageUrls.map((url, i) =>
-      fetchAndParseList(url, userLabels[i])
+      sleep(i * 400).then(() => fetchAndParseList(url, userLabels[i]))
     ));
 
 
@@ -500,16 +503,22 @@ async function fetchAndParseList(baseUrl, label) {
     let html;
     try {
       html = await fetchViaFastestProxy(pageUrl);
-    } catch (err) {
-      if (page === 1) {
-        throw new Error(
-          `No se pudo acceder a "${label}".\n` +
-          `Verificá que la URL sea correcta y que la lista/watchlist sea pública.\n` +
-          err.message
-        );
+    } catch (firstErr) {
+      console.warn(`[${label}] p${page} falló, reintentando en 1s…`);
+      await sleep(1000);
+      try {
+        html = await fetchViaFastestProxy(pageUrl);
+      } catch (err) {
+        if (page === 1) {
+          throw new Error(
+            `No se pudo acceder a "${label}".\n` +
+            `Verificá que la URL sea correcta y que la lista/watchlist sea pública.\n` +
+            err.message
+          );
+        }
+        console.warn(`[${label}] p${page} all proxies failed — stopping pagination.`);
+        break;
       }
-      console.warn(`[${label}] p${page} all proxies failed — stopping pagination.`);
-      break;
     }
 
     // Sanity-check: confirm it's Letterboxd HTML
@@ -527,9 +536,9 @@ async function fetchAndParseList(baseUrl, label) {
       allMovies.push(...movies);
 
       if (perPage === null) {
-        if (movies.length <= 28)      perPage = FILMS_PER_PAGE_WATCHLIST;
+        if (movies.length <= 28) perPage = FILMS_PER_PAGE_WATCHLIST;
         else if (movies.length <= 72) perPage = 72;
-        else                          perPage = movies.length;
+        else perPage = movies.length;
         console.log(`[${label}] Auto-detected perPage = ${perPage} (got ${movies.length} on p1)`);
       }
 
@@ -592,7 +601,7 @@ function fetchWithTimeout(url, timeout = 8000) {
  *   - Resolves as soon as ANY promise resolves
  *   - Rejects only when ALL promises reject (AggregateError)
  */
-async function fetchViaFastestProxy(targetUrl, timeout = 8000) {
+async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
   const proxyAttempts = PROXIES.map(async (proxy) => {
     const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
     const t0 = Date.now();
@@ -668,13 +677,13 @@ function parseHtmlFilmPosters(html, label) {
   lazyPosters.forEach(el => {
     // ── Slug (canonical film identifier) ──────────────────────────────────────
     let slug = el.getAttribute('data-item-slug')
-            || el.getAttribute('data-film-slug');
+      || el.getAttribute('data-film-slug');
 
     if (!slug) {
       // Derive from link attributes if slug attribute is absent
       const link = el.getAttribute('data-target-link')
-                || el.getAttribute('data-item-link')
-                || el.getAttribute('data-film-link');
+        || el.getAttribute('data-item-link')
+        || el.getAttribute('data-film-link');
       if (link) {
         const m = link.match(/\/film\/([a-z0-9-]+)/);
         if (m) slug = m[1];
@@ -686,13 +695,13 @@ function parseHtmlFilmPosters(html, label) {
 
     // ── Display name (may include year) ──────────────────────────────────────
     const fullDisplayName = el.getAttribute('data-item-full-display-name')
-                         || el.getAttribute('data-item-name')
-                         || '';
+      || el.getAttribute('data-item-name')
+      || '';
 
     // ── Title (strip trailing year in parentheses) ────────────────────────────
     let title = el.getAttribute('data-film-name')
-             || el.getAttribute('data-original-title')
-             || '';
+      || el.getAttribute('data-original-title')
+      || '';
 
     if (!title && fullDisplayName) {
       // "Princess Mononoke (1997)" → "Princess Mononoke"
@@ -969,11 +978,14 @@ function renderCommonMovies(movies) {
     const card = createMovieCard(movie, i, true);
     commonGrid.appendChild(card);
   });
+
+  enrichGridPosters(sorted, commonGrid);
 }
 
 function renderUniqueTabs(uniqueByUser, allUsers) {
   uniqueTabs.innerHTML = '';
   uniquePanels.innerHTML = '';
+  state.uniqueTabData = {}; // ← reset: trackea qué pestañas ya se enriquecieron
 
   allUsers.forEach((user, i) => {
     const isActive = i === 0;
@@ -1012,6 +1024,15 @@ function renderUniqueTabs(uniqueByUser, allUsers) {
         grid.appendChild(createMovieCard(movie, j, false));
       });
       panel.appendChild(grid);
+
+      // Save the reference to be able to enrich this tab later
+      state.uniqueTabData[i] = { movies, gridEl: grid, enriched: false };
+
+      // The tab that starts visible is enriched immediately
+      if (isActive) {
+        state.uniqueTabData[i].enriched = true;
+        enrichGridPosters(movies, grid);
+      }
     }
 
     uniquePanels.appendChild(panel);
@@ -1027,6 +1048,13 @@ function switchTab(index) {
   $$('.tab-panel').forEach((panel, i) => {
     panel.classList.toggle('active', i === index);
   });
+
+  // Enrich posters only the first time the user opens this tab
+  const tabData = state.uniqueTabData?.[index];
+  if (tabData && !tabData.enriched) {
+    tabData.enriched = true;
+    enrichGridPosters(tabData.movies, tabData.gridEl);
+  }
 }
 
 // ─── POSTER FALLBACK HELPER ──────────────────────────────────────────────────
@@ -1053,6 +1081,7 @@ function posterFallback(imgEl) {
 function createMovieCard(movie, index, isCommon) {
   const card = document.createElement('div');
   card.className = 'movie-card';
+  card.dataset.movieId = movie.id;
   card.style.animationDelay = `${Math.min(index * 0.04, 0.5)}s`;
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
@@ -1091,9 +1120,44 @@ function createMovieCard(movie, index, isCommon) {
 // ─── MOVIE MODAL ──────────────────────────────────────────────────────────────
 
 function openMovieModal(movie, isCommon) {
+  const needsData = !movie.poster || !movie.description || movie.rating == null;
+  renderModalContent(movie, isCommon, needsData);
+
+  movieModal.classList.remove('hidden');
+  movieModal.removeAttribute('aria-hidden');
+  modalCloseBtn.focus();
+  document.body.style.overflow = 'hidden';
+
+  if (needsData) {
+    enrichMovieMeta(movie).then(meta => {
+      if (meta.poster) movie.poster = meta.poster;
+      if (meta.description) movie.description = meta.description;
+      if (meta.rating != null) movie.rating = meta.rating;
+
+      // Solo re-pintamos si el modal sigue abierto mostrando esta misma película
+      if (!movieModal.classList.contains('hidden') && modalContent.dataset.movieId === movie.id) {
+        renderModalContent(movie, isCommon, false);
+      }
+    });
+  }
+}
+
+function renderModalContent(movie, isCommon, loading) {
+  modalContent.dataset.movieId = movie.id;
+
   const posterHtml = movie.poster
-    ? `<img src="${escapeAttr(movie.poster)}" alt="Póster" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem;">Sin póster</div>`;
+    ? `<img src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="posterFallback(this)" />`
+    : (loading
+        ? `<div class="modal-poster-loading"><span class="spinner"></span></div>`
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem;">Sin póster</div>`);
+
+  const ratingHtml = movie.rating != null
+    ? `<div class="modal-rating">${ratingToStars(movie.rating)} <span class="modal-rating-num">${movie.rating.toFixed(1)}</span></div>`
+    : (loading ? `<div class="modal-rating modal-rating-loading">Cargando calificación…</div>` : '');
+
+  const descHtml = movie.description
+    ? `<p class="modal-desc">${escapeHtml(movie.description.slice(0, 320))}${movie.description.length > 320 ? '…' : ''}</p>`
+    : (loading ? `<p class="modal-desc modal-desc-loading">Cargando sinopsis…</p>` : '');
 
   modalContent.innerHTML = `
     <div class="modal-movie-inner">
@@ -1101,7 +1165,8 @@ function openMovieModal(movie, isCommon) {
       <div class="modal-details">
         <h2 class="modal-title" id="modal-title">${escapeHtml(movie.title)}</h2>
         ${movie.year ? `<div class="modal-year">${movie.year}</div>` : ''}
-        ${movie.description ? `<p class="modal-desc">${escapeHtml(movie.description.slice(0, 220))}${movie.description.length > 220 ? '…' : ''}</p>` : ''}
+        ${ratingHtml}
+        ${descHtml}
         <a class="modal-link" href="${escapeAttr(movie.link)}" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Ver en Letterboxd
@@ -1114,11 +1179,6 @@ function openMovieModal(movie, isCommon) {
       </div>
     </div>
   `;
-
-  movieModal.classList.remove('hidden');
-  movieModal.removeAttribute('aria-hidden');
-  modalCloseBtn.focus();
-  document.body.style.overflow = 'hidden';
 }
 
 function closeModal() {
@@ -1202,6 +1262,16 @@ async function initTop5(pool) {
  *   - rating: average rating numeric value (0–5) → converted to ★ string
  */
 async function enrichMovieMeta(movie) {
+  // ── Caché hit: evita re-pedir lo que ya conseguimos antes ─────────────────
+  const cached = filmMetaCache.get(movie.id);
+  if (cached) {
+    return {
+      poster: cached.poster ?? movie.poster ?? null,
+      description: cached.description || movie.description || '',
+      rating: cached.rating ?? null,
+    };
+  }
+
   const result = { poster: movie.poster || null, description: movie.description || '', rating: null };
   try {
     // ── Fetch film page via fastest available proxy ────────────────────────────
@@ -1273,11 +1343,79 @@ async function enrichMovieMeta(movie) {
     if (!result.description) {
       result.description = 'Sinopsis no disponible en Letterboxd';
     }
-
   } catch (err) {
     console.warn('[enrichMovieMeta]', movie.id, err.message);
   }
+
+  // ── Guardar en caché solo si llegamos hasta acá (hubo respuesta del proxy) ─
+  filmMetaCache.set(movie.id, { poster: result.poster, description: result.description, rating: result.rating });
+
   return result;
+}
+
+// ─── POSTER CACHE (independent of the list cache, longer TTL) ────────
+const POSTER_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — posters don't change
+
+// ─── FILM METADATA CACHE (póster + sinopsis + rating, compartido grid ↔ modal ↔ Top5) ──
+const FILM_META_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+const filmMetaCache = {
+  _key(slug) { return `lbmatch_meta_v1_${slug}`; },
+  get(slug) {
+    try {
+      const raw = localStorage.getItem(this._key(slug));
+      if (!raw) return undefined;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > FILM_META_CACHE_TTL_MS) {
+        localStorage.removeItem(this._key(slug));
+        return undefined;
+      }
+      return data; // { poster, description, rating }
+    } catch { return undefined; }
+  },
+  set(slug, data) {
+    try {
+      localStorage.setItem(this._key(slug), JSON.stringify({ data, ts: Date.now() }));
+    } catch {}
+  },
+};
+
+/**
+ * Enriches a grid already rendered with real posters, with limited concurrency
+ * (3 at a time) to avoid saturating CORS proxies.
+ */
+async function enrichGridPosters(movies, gridEl, maxConcurrent = 3) {
+  const queue = movies.filter(m => !m.poster && m.link);
+  if (queue.length === 0) return;
+
+  let active = 0, idx = 0;
+  return new Promise(resolve => {
+    function next() {
+      if (idx >= queue.length && active === 0) return resolve();
+      while (active < maxConcurrent && idx < queue.length) {
+        const movie = queue[idx++];
+        active++;
+        enrichMovieMeta(movie).then(meta => {
+          active--;
+          if (meta.poster) movie.poster = meta.poster;
+          if (meta.description) movie.description = meta.description;
+          if (meta.rating != null) movie.rating = meta.rating;
+
+          if (meta.poster) {
+            const card = gridEl.querySelector(`[data-movie-id="${CSS.escape(movie.id)}"]`);
+            const wrap = card?.querySelector('.movie-poster-wrap');
+            if (wrap) {
+              wrap.innerHTML = `
+                <img class="movie-poster" src="${escapeAttr(meta.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="lazy" onerror="posterFallback(this)" />
+                <div class="movie-hover-overlay"><span class="overlay-btn">Ver detalles →</span></div>`;
+            }
+          }
+          next();
+        });
+      }
+    }
+    next();
+  });
 }
 
 /**
@@ -1286,8 +1424,8 @@ async function enrichMovieMeta(movie) {
 function ratingToStars(rating) {
   if (rating === null || rating === undefined) return null;
   const val = Math.round(rating * 2) / 2; // round to nearest 0.5
-  const full  = Math.floor(val);
-  const half  = val % 1 >= 0.5 ? 1 : 0;
+  const full = Math.floor(val);
+  const half = val % 1 >= 0.5 ? 1 : 0;
   const empty = 5 - full - half;
   return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
 }
@@ -1382,7 +1520,7 @@ function showTop5Winner() {
   // Winner banner
   const banner = top5WinnerBanner();
   if (winnerData) {
-    winnerMovieName().textContent = `"${winnerData.title}${winnerData.year ? ` (${winnerData.year})` : ''}"` ;
+    winnerMovieName().textContent = `"${winnerData.title}${winnerData.year ? ` (${winnerData.year})` : ''}"`;
     winnerLbLink().href = winnerData.link || '#';
   }
   banner.classList.remove('hidden');
@@ -1413,7 +1551,7 @@ function launchConfetti() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  canvas.width  = window.innerWidth;
+  canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
   const COLORS = ['#f4a535', '#00c774', '#f97316', '#5b8def', '#e879f9', '#f43f5e'];
@@ -1424,7 +1562,7 @@ function launchConfetti() {
     color: COLORS[Math.floor(Math.random() * COLORS.length)],
     speed: Math.random() * 3 + 1.5,
     angle: Math.random() * Math.PI * 2,
-    spin:  (Math.random() - 0.5) * 0.2,
+    spin: (Math.random() - 0.5) * 0.2,
     opacity: 1,
     shape: Math.random() > 0.5 ? 'rect' : 'circle',
   }));
@@ -1499,9 +1637,9 @@ function stopConfetti() {
  */
 function decodeHtmlEntities(str) {
   return str
-    .replace(/&amp;/g,  '&')
-    .replace(/&lt;/g,   '<')
-    .replace(/&gt;/g,   '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&nbsp;/g, ' ');
