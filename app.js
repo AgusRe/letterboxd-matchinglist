@@ -23,13 +23,11 @@
 const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 const PROXIES = [
-  // Solo se usa en desarrollo local (node proxy-server.js)
   ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text' }] : []),
-  // Únicos proxies públicos verificados como funcionales hoy
+  { url: 'https://letterboxd-proxy.agustin2-re.workers.dev/?url=', mode: 'text' },
   { url: 'https://api.allorigins.win/raw?url=', mode: 'text' },
-  { url: 'https://api.codetabs.com/v1/proxy?quest=', mode: 'text'}
+  { url: 'https://api.codetabs.com/v1/proxy?quest=', mode: 'text' },
 ];
-
 // ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
