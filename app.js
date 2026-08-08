@@ -26,7 +26,6 @@ const PROXIES = [
   ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text' }] : []),
   { url: 'https://letterboxd-proxy.agustin2-re.workers.dev/?url=', mode: 'text' },
   { url: 'https://api.allorigins.win/raw?url=', mode: 'text' },
-  { url: 'https://api.codetabs.com/v1/proxy?quest=', mode: 'text' },
 ];
 // ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
 
@@ -600,48 +599,73 @@ function fetchWithTimeout(url, timeout = 8000) {
  *   - Rejects only when ALL promises reject (AggregateError)
  */
 async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
-  const proxyAttempts = PROXIES.map(async (proxy) => {
-    const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
-    const host = proxy.url.split('/')[2];
-    const t0 = Date.now();
+  const [primary, ...fallbacks] = PROXIES;
 
-    try {
-      const resp = await fetchWithTimeout(proxyUrl, timeout);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  // 1) Intentamos SOLO el proxy principal (tu Worker / localhost en dev).
+  //    Si funciona (que es el 99% de los casos), no tocamos los públicos
+  //    y la consola queda limpia.
+  try {
+    return await attemptProxy(primary, targetUrl, timeout);
+  } catch (err) {
+    console.warn(`[Proxy] ⚠️ Proxy principal falló (${primary.url.split('/')[2]}), probando fallbacks…`);
+  }
 
-      let html;
-      if (proxy.mode === 'json-contents') {
-        const data = await resp.json();
-        if (!data.contents) throw new Error('Empty contents');
-        html = data.contents;
-      } else {
-        html = await resp.text();
-      }
-
-      if (!html || html.trim().length < 500) {
-        throw new Error(`Response too short (${html?.trim().length ?? 0} chars): ${html?.slice(0, 150)}`);
-      }
-
-      const elapsed = Date.now() - t0;
-      if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
-      _proxySpeedLog[host].push(elapsed);
-      console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
-
-      return html;
-    } catch (err) {
-      console.warn(`[Proxy] ❌ ${host} — ${err.message}`);
-      throw err;
-    }
-  });
+  // 2) Solo si el principal falla, recién ahí recurrimos a los públicos.
+  if (fallbacks.length === 0) {
+    throw new Error(
+      `Todos los proxies CORS fallaron para esta petición.\n` +
+      `💡 Si usás Opera GX, Brave u otro navegador con bloqueador integrado, ` +
+      `desactivá el bloqueador para esta página (ícono de escudo en la barra de direcciones).`
+    );
+  }
 
   try {
-    return await Promise.any(proxyAttempts);
+    return await Promise.any(fallbacks.map(proxy => attemptProxy(proxy, targetUrl, timeout)));
   } catch {
     throw new Error(
       `Todos los proxies CORS fallaron para esta petición.\n` +
       `💡 Si usás Opera GX, Brave u otro navegador con bloqueador integrado, ` +
       `desactivá el bloqueador para esta página (ícono de escudo en la barra de direcciones).`
     );
+  }
+}
+
+/**
+ * Un solo intento de proxy: fetch + validación + log de éxito.
+ * Extraído de fetchViaFastestProxy para poder reusarlo en el intento
+ * principal y en los fallbacks sin duplicar código.
+ */
+async function attemptProxy(proxy, targetUrl, timeout) {
+  const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
+  const host = proxy.url.split('/')[2];
+  const t0 = Date.now();
+
+  try {
+    const resp = await fetchWithTimeout(proxyUrl, timeout);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    let html;
+    if (proxy.mode === 'json-contents') {
+      const data = await resp.json();
+      if (!data.contents) throw new Error('Empty contents');
+      html = data.contents;
+    } else {
+      html = await resp.text();
+    }
+
+    if (!html || html.trim().length < 500) {
+      throw new Error(`Response too short (${html?.trim().length ?? 0} chars)`);
+    }
+
+    const elapsed = Date.now() - t0;
+    if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
+    _proxySpeedLog[host].push(elapsed);
+    console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
+
+    return html;
+  } catch (err) {
+    console.warn(`[Proxy] ❌ ${host} — ${err.message}`);
+    throw err;
   }
 }
 /**
