@@ -602,34 +602,39 @@ function fetchWithTimeout(url, timeout = 8000) {
 async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
   const proxyAttempts = PROXIES.map(async (proxy) => {
     const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
+    const host = proxy.url.split('/')[2];
     const t0 = Date.now();
 
-    const resp = await fetchWithTimeout(proxyUrl, timeout);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    try {
+      const resp = await fetchWithTimeout(proxyUrl, timeout);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-    let html;
-    if (proxy.mode === 'json-contents') {
-      const data = await resp.json();
-      if (!data.contents) throw new Error('Empty contents');
-      html = data.contents;
-    } else {
-      html = await resp.text();
+      let html;
+      if (proxy.mode === 'json-contents') {
+        const data = await resp.json();
+        if (!data.contents) throw new Error('Empty contents');
+        html = data.contents;
+      } else {
+        html = await resp.text();
+      }
+
+      if (!html || html.trim().length < 500) {
+        throw new Error(`Response too short (${html?.trim().length ?? 0} chars): ${html?.slice(0, 150)}`);
+      }
+
+      const elapsed = Date.now() - t0;
+      if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
+      _proxySpeedLog[host].push(elapsed);
+      console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
+
+      return html;
+    } catch (err) {
+      console.warn(`[Proxy] ❌ ${host} — ${err.message}`);
+      throw err;
     }
-
-    if (!html || html.trim().length < 500) throw new Error('Response too short');
-
-    // Record speed for DevTools debugging: console.table(window._proxySpeedLog)
-    const elapsed = Date.now() - t0;
-    const host = proxy.url.split('/')[2];
-    if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
-    _proxySpeedLog[host].push(elapsed);
-    console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
-
-    return html;
   });
 
   try {
-    // Promise.any: first fulfillment wins; throws AggregateError only if all reject
     return await Promise.any(proxyAttempts);
   } catch {
     throw new Error(
@@ -639,7 +644,6 @@ async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
     );
   }
 }
-
 /**
  * Parse a Letterboxd HTML page and extract film data.
  *
