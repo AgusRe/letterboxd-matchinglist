@@ -4,18 +4,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Letterboxd Match — Compará tus Watchlists</title>
+  <title>Letterboxd Match — Compará Watchlists con Amigos</title>
   <meta name="description"
-    content="Compará las watchlists y listas públicas de múltiples usuarios de Letterboxd para encontrar películas en común al instante." />
-  <meta property="og:title" content="Letterboxd Match — Compará tus Watchlists" />
-  <meta property="og:description" content="Descubrí qué películas tienen en común tus amigos en Letterboxd." />
+    content="Compará las watchlists y listas públicas de hasta 5 usuarios de Letterboxd y encontrá al instante qué películas quieren ver todos. Sin registro, sin API key." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://agusre.github.io/letterboxd-matchinglist/" />
+
+  <!-- Open Graph (WhatsApp, Facebook, Discord, Slack, etc.) -->
+  <meta property="og:title" content="Letterboxd Match — Compará Watchlists con Amigos" />
+  <meta property="og:description" content="Descubrí qué películas tienen en común vos y tus amigos en Letterboxd, al instante." />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://agusre.github.io/letterboxd-matchinglist/" />
+  <meta property="og:image" content="https://agusre.github.io/letterboxd-matchinglist/og-image.png" />
+  <meta property="og:locale" content="es_AR" />
+
+  <!-- Twitter/X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Letterboxd Match — Compará Watchlists con Amigos" />
+  <meta name="twitter:description" content="Descubrí qué películas tienen en común vos y tus amigos en Letterboxd, al instante." />
+  <meta name="twitter:image" content="https://agusre.github.io/letterboxd-matchinglist/og-image.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicons/favicon.svg" />
+  <link rel="icon" type="image/x-icon" href="favicons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon.png" />
+  <link rel="manifest" href="favicons/site.webmanifest" />
+
+  <!-- Datos estructurados para Google (rich results) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Letterboxd Match",
+    "url": "https://agusre.github.io/letterboxd-matchinglist/",
+    "description": "Compará las watchlists y listas públicas de múltiples usuarios de Letterboxd para encontrar películas en común al instante.",
+    "applicationCategory": "Entertainment",
+    "operatingSystem": "Any (Web Browser)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=1" />
 </head>
 
 <body>
