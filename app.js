@@ -65,7 +65,7 @@ const letterboxdCache = {
   clearAll() {
     try {
       Object.keys(localStorage)
-        .filter(k => k.startsWith('lbmatch_v1_'))
+        .filter(k => k.startsWith('lbmatch_v1_') && k !== HISTORY_KEY)
         .forEach(k => localStorage.removeItem(k));
     } catch { }
   },
@@ -90,6 +90,94 @@ const FILMS_PER_PAGE_WATCHLIST = 28;
 const FILMS_PER_PAGE_LIST = 72;
 const MAX_USERS = 5;
 const MIN_USERS = 2;
+
+// ─── COMPARISON HISTORY (localStorage · key: lbmatch_v1_history) ──────────────
+
+const HISTORY_KEY = 'lbmatch_v1_history';
+const MAX_HISTORY_ITEMS = 10;
+
+const comparisonHistory = {
+  getAll() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+  saveEntry(mode, rawInputs, labels, commonCount) {
+    try {
+      const items = this.getAll();
+      const newEntry = {
+        id: String(Date.now()),
+        timestamp: Date.now(),
+        mode,
+        inputs: rawInputs.filter(Boolean),
+        labels,
+        commonCount: typeof commonCount === 'number' ? commonCount : 0,
+      };
+
+      // Evitar duplicados idénticos consecutivos
+      const filtered = items.filter(it => {
+        const sameMode = it.mode === newEntry.mode;
+        const sameInputs = it.inputs.length === newEntry.inputs.length &&
+          it.inputs.every((val, idx) => val.trim().toLowerCase() === newEntry.inputs[idx].trim().toLowerCase());
+        return !(sameMode && sameInputs);
+      });
+
+      filtered.unshift(newEntry);
+      const capped = filtered.slice(0, MAX_HISTORY_ITEMS);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(capped));
+      renderHistoryUI();
+    } catch (e) {
+      console.warn('[History] localStorage write failed:', e.message);
+    }
+  },
+  removeEntry(id) {
+    try {
+      const items = this.getAll().filter(it => it.id !== id);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+      renderHistoryUI();
+    } catch { }
+  },
+  clearAll() {
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistoryUI();
+    } catch { }
+  },
+  getLatest() {
+    const all = this.getAll();
+    return all.length > 0 ? all[0] : null;
+  }
+};
+
+// ─── UTILITIES ───────────────────────────────────────────────────────────────
+
+function debounce(fn, wait = 350) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+function formatRelativeTime(ts) {
+  const now = Date.now();
+  const diffSec = Math.floor((now - ts) / 1000);
+  if (diffSec < 60) return 'Hace instantes';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Hace ${diffMin} min`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `Hace ${diffHours} h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Ayer';
+  if (diffDays < 7) return `Hace ${diffDays} d`;
+  const d = new Date(ts);
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+}
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +205,13 @@ const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 const usersContainer = $('#users-container');
 const btnAddUser = $('#btn-add-user');
 const btnCompare = $('#btn-compare');
+const btnClearInputs = $('#btn-clear-inputs');
+const btnToggleHistory = $('#btn-toggle-history');
+const historyPanel = $('#history-panel');
+const historyList = $('#history-list');
+const historyBadge = $('#history-badge');
+const btnCloseHistory = $('#btn-close-history');
+const btnClearHistory = $('#btn-clear-history');
 const errorBanner = $('#error-banner');
 const loadingSection = $('#loading-section');
 const loadingMessage = $('#loading-message');
@@ -144,11 +239,330 @@ const top5ConfettiCvs = () => $('#top5-confetti');
 const winnerMovieName = () => $('#winner-movie-name');
 const winnerLbLink = () => $('#winner-lb-link');
 
+// ─── VALIDATION HELPERS ───────────────────────────────────────────────────────
+
+function isValidUsername(name) {
+  return /^@?[a-zA-Z0-9._-]{1,60}$/.test(name.trim());
+}
+
+function isValidLetterboxdListUrl(url) {
+  try {
+    const full = url.startsWith('http') ? url : `https://${url}`;
+    const u = new URL(full);
+    const host = u.hostname.replace(/^www\./, '');
+    return host === 'letterboxd.com' && u.pathname.includes('/list/');
+  } catch { return false; }
+}
+
+function isValidLetterboxdUrl(url) {
+  try {
+    const full = url.startsWith('http') ? url : `https://${url}`;
+    const host = u.hostname.replace(/^www\./, '');
+    return host === 'letterboxd.com' && u.pathname.length > 1;
+  } catch { return false; }
+}
+
+/**
+ * Validates a single input value in real-time.
+ * Returns: { valid: boolean, empty: boolean, message: string }
+ */
+function validateInputValue(rawVal, mode) {
+  const val = (rawVal || '').trim();
+  if (!val) {
+    return { valid: false, empty: true, message: '' };
+  }
+
+  if (mode === 'list') {
+    // Mode "Lista Específica": requires list URL
+    if (val.startsWith('@') || (!val.includes('/') && isValidUsername(val))) {
+      return {
+        valid: false,
+        empty: false,
+        message: 'En modo lista, ingresá la URL completa de una lista pública (ej: letterboxd.com/usuario/list/nombre/)'
+      };
+    }
+    if (val.includes('letterboxd.com') && !val.includes('/list/')) {
+      return {
+        valid: false,
+        empty: false,
+        message: 'Esta no parece una lista específica. Usá el formato: letterboxd.com/usuario/list/nombre/'
+      };
+    }
+    if (isValidLetterboxdListUrl(val)) {
+      return { valid: true, empty: false, message: '' };
+    }
+    return {
+      valid: false,
+      empty: false,
+      message: 'Ingresá una URL válida de lista pública de Letterboxd'
+    };
+  }
+
+  // Mode "Watchlist":
+  // 1) Username (@username or username alone)
+  if (!val.includes('/') || (val.startsWith('@') && !val.includes('/'))) {
+    const clean = val.replace(/^@/, '').trim();
+    if (isValidUsername(clean)) {
+      return { valid: true, empty: false, message: '' };
+    }
+    return {
+      valid: false,
+      empty: false,
+      message: 'Nombre de usuario inválido. Usá solo letras, números, puntos o guiones.'
+    };
+  }
+
+  // 2) URL format
+  try {
+    const full = val.startsWith('http') ? val : `https://${val}`;
+    const u = new URL(full);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host !== 'letterboxd.com') {
+      return { valid: false, empty: false, message: 'La URL debe pertenecer a letterboxd.com' };
+    }
+    if (u.pathname.includes('/list/')) {
+      return {
+        valid: false,
+        empty: false,
+        message: 'Esta es una lista específica. Cambiá al modo "Lista Específica" arriba.'
+      };
+    }
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (parts.length === 0) {
+      return { valid: false, empty: false, message: 'Falta el nombre de usuario en la URL' };
+    }
+    return { valid: true, empty: false, message: '' };
+  } catch {
+    return { valid: false, empty: false, message: 'Ingresá un usuario o URL válida de Letterboxd' };
+  }
+}
+
+function applyValidationUI(row, result) {
+  const inp = row.querySelector('.user-input');
+  const icon = row.querySelector('.input-validation-icon');
+  const feedback = row.querySelector('.input-feedback-msg');
+
+  if (!inp || !icon || !feedback) return;
+
+  inp.classList.remove('is-valid', 'is-invalid');
+  icon.classList.remove('is-valid', 'is-invalid');
+  icon.innerHTML = '';
+  feedback.textContent = '';
+  feedback.classList.add('hidden');
+
+  if (result.empty) {
+    inp.dataset.valid = 'false';
+    return;
+  }
+
+  if (result.valid) {
+    inp.dataset.valid = 'true';
+    inp.classList.add('is-valid');
+    icon.classList.add('is-valid');
+    icon.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    `;
+  } else {
+    inp.dataset.valid = 'false';
+    inp.classList.add('is-invalid');
+    icon.classList.add('is-invalid');
+    icon.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    `;
+    feedback.textContent = result.message;
+    feedback.classList.remove('hidden');
+  }
+}
+
+function updateCompareButtonState() {
+  const rows = $$('.user-row', usersContainer);
+  let validCount = 0;
+  rows.forEach(row => {
+    const inp = row.querySelector('.user-input');
+    if (inp && inp.dataset.valid === 'true') {
+      validCount++;
+    }
+  });
+
+  const canCompare = validCount >= MIN_USERS;
+  btnCompare.disabled = !canCompare;
+  btnCompare.setAttribute('aria-disabled', String(!canCompare));
+  if (!canCompare) {
+    btnCompare.title = `Ingresá al menos ${MIN_USERS} usuarios o listas válidas para comparar`;
+  } else {
+    btnCompare.title = 'Comparar Listas';
+  }
+}
+
+function attachRowValidation(row) {
+  const inp = row.querySelector('.user-input');
+  if (!inp) return;
+
+  const debouncedValidate = debounce(() => {
+    const result = validateInputValue(inp.value, state.sourceMode);
+    applyValidationUI(row, result);
+    updateCompareButtonState();
+  }, 350);
+
+  inp.addEventListener('input', debouncedValidate);
+  inp.addEventListener('blur', () => {
+    const result = validateInputValue(inp.value, state.sourceMode);
+    applyValidationUI(row, result);
+    updateCompareButtonState();
+  });
+}
+
+// ─── HISTORY UI ───────────────────────────────────────────────────────────────
+
+function initHistoryUI() {
+  renderHistoryUI();
+}
+
+function renderHistoryUI() {
+  if (!historyList || !historyBadge) return;
+  const items = comparisonHistory.getAll();
+
+  if (items.length === 0) {
+    historyBadge.classList.add('hidden');
+    historyList.innerHTML = `
+      <div class="history-empty">
+        <span class="history-empty-icon" aria-hidden="true">📂</span>
+        <p>No hay comparaciones guardadas todavía.</p>
+        <small>Las búsquedas exitosas aparecerán acá automáticamente.</small>
+      </div>
+    `;
+    if (btnClearHistory) btnClearHistory.style.display = 'none';
+    return;
+  }
+
+  historyBadge.textContent = items.length;
+  historyBadge.classList.remove('hidden');
+  if (btnClearHistory) btnClearHistory.style.display = 'inline-block';
+
+  historyList.innerHTML = items.map(item => {
+    const isWatchlist = item.mode === 'watchlist';
+    const modeLabel = isWatchlist ? 'Watchlist' : 'Lista';
+    const modeBadgeClass = isWatchlist ? 'badge-mode-watchlist' : 'badge-mode-list';
+    const timeStr = formatRelativeTime(item.timestamp);
+    const usersStr = item.labels.map(l => `<span class="history-user-chip">${escapeHtml(l)}</span>`).join('');
+    const commonStr = item.commonCount > 0
+      ? `<span class="history-match-chip">${item.commonCount} en común</span>`
+      : `<span class="history-match-chip is-zero">0 en común</span>`;
+
+    return `
+      <div class="history-item" data-id="${escapeAttr(item.id)}" role="listitem" tabindex="0">
+        <div class="history-item-content">
+          <div class="history-item-meta">
+            <span class="history-mode-badge ${modeBadgeClass}">${modeLabel}</span>
+            <span class="history-time">${timeStr}</span>
+            ${commonStr}
+          </div>
+          <div class="history-item-users">
+            ${usersStr}
+          </div>
+        </div>
+        <button class="btn-remove-history" data-id="${escapeAttr(item.id)}" type="button" aria-label="Eliminar comparación del historial">
+          ✕
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleHistoryPanel() {
+  if (!historyPanel) return;
+  const isHidden = historyPanel.classList.contains('hidden');
+  if (isHidden) {
+    historyPanel.classList.remove('hidden');
+    btnToggleHistory?.setAttribute('aria-expanded', 'true');
+    renderHistoryUI();
+  } else {
+    closeHistoryPanel();
+  }
+}
+
+function closeHistoryPanel() {
+  if (!historyPanel) return;
+  historyPanel.classList.add('hidden');
+  btnToggleHistory?.setAttribute('aria-expanded', 'false');
+}
+
+function loadHistoryItem(id) {
+  const items = comparisonHistory.getAll();
+  const item = items.find(it => it.id === id);
+  if (!item) return;
+
+  state.sourceMode = item.mode || 'watchlist';
+  const radio = $(`input[name="source"][value="${state.sourceMode}"]`);
+  if (radio) radio.checked = true;
+
+  const count = Math.min(MAX_USERS, Math.max(MIN_USERS, item.inputs.length));
+  usersContainer.innerHTML = '';
+  state.userCount = count;
+  for (let i = 0; i < count; i++) {
+    addUserRow(i + 1);
+    const row = usersContainer.querySelector(`[data-index="${i + 1}"]`);
+    const inp = row?.querySelector('.user-input');
+    if (inp && item.inputs[i]) {
+      inp.value = item.inputs[i];
+      const res = validateInputValue(inp.value, state.sourceMode);
+      applyValidationUI(row, res);
+    }
+  }
+  updateAddButton();
+  updateCompareButtonState();
+  closeHistoryPanel();
+}
+
+function preloadLastSearch() {
+  const latest = comparisonHistory.getLatest();
+  if (!latest || !latest.inputs || latest.inputs.length === 0) {
+    updateCompareButtonState();
+    return;
+  }
+
+  state.sourceMode = latest.mode || 'watchlist';
+  const radio = $(`input[name="source"][value="${state.sourceMode}"]`);
+  if (radio) radio.checked = true;
+
+  const count = Math.min(MAX_USERS, Math.max(MIN_USERS, latest.inputs.length));
+  usersContainer.innerHTML = '';
+  state.userCount = count;
+  for (let i = 0; i < count; i++) {
+    addUserRow(i + 1);
+    const row = usersContainer.querySelector(`[data-index="${i + 1}"]`);
+    const inp = row?.querySelector('.user-input');
+    if (inp && latest.inputs[i]) {
+      inp.value = latest.inputs[i];
+      const res = validateInputValue(inp.value, state.sourceMode);
+      applyValidationUI(row, res);
+    }
+  }
+  updateAddButton();
+  updateCompareButtonState();
+}
+
+function handleClearInputs() {
+  buildUserRows(MIN_USERS);
+  hideError();
+  updateCompareButtonState();
+  const firstInp = $(`#user-input-1`);
+  if (firstInp) firstInp.focus();
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
 function init() {
   buildUserRows(MIN_USERS);
   setupEventListeners();
+  initHistoryUI();
+  preloadLastSearch();
 }
 
 // ─── USER ROWS ───────────────────────────────────────────────────────────────
@@ -166,30 +580,39 @@ function addUserRow(index) {
   row.dataset.index = index;
 
   const isListMode = state.sourceMode === 'list';
-  // Both modes now accept full URLs
   const placeholder = isListMode
     ? `https://letterboxd.com/usuario/list/nombre-lista/`
-    : `https://letterboxd.com/usuario/watchlist/`;
+    : `https://letterboxd.com/usuario/watchlist/ o usuario`;
 
   row.innerHTML = `
-    <span class="user-index" aria-label="Usuario ${index}">${index}</span>
-    <input
-      type="url"
-      class="user-input is-list-url"
-      id="user-input-${index}"
-      placeholder="${placeholder}"
-      autocomplete="off"
-      spellcheck="false"
-      aria-label="URL de ${isListMode ? 'lista' : 'watchlist'} para usuario ${index}"
-    />
+    <label for="user-input-${index}" class="visually-hidden">Usuario ${index}</label>
+    <span class="user-index" aria-hidden="true">${index}</span>
+    <div class="user-input-wrap">
+      <div class="input-field-inner">
+        <input
+          type="text"
+          class="user-input is-list-url"
+          id="user-input-${index}"
+          placeholder="${placeholder}"
+          autocomplete="off"
+          spellcheck="false"
+          data-valid="false"
+          aria-label="${isListMode ? 'URL de lista pública' : 'Usuario o URL de watchlist'} para persona ${index}"
+          aria-describedby="feedback-user-${index}"
+        />
+        <span class="input-validation-icon" aria-hidden="true"></span>
+      </div>
+      <div class="input-feedback-msg hidden" id="feedback-user-${index}" role="alert"></div>
+    </div>
     <button class="btn-remove" data-row="${index}" aria-label="Eliminar usuario ${index}" ${index <= MIN_USERS ? 'disabled' : ''}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
         <path d="M18 6 6 18M6 6l12 12"/>
       </svg>
     </button>
   `;
 
   usersContainer.appendChild(row);
+  attachRowValidation(row);
 }
 
 function removeUserRow(rowIndex) {
@@ -215,20 +638,27 @@ function renumberRows() {
   rows.forEach((row, i) => {
     const n = i + 1;
     row.dataset.index = n;
+    const label = row.querySelector('label');
     const idx = row.querySelector('.user-index');
     const inp = row.querySelector('.user-input');
+    const feedback = row.querySelector('.input-feedback-msg');
     const btn = row.querySelector('.btn-remove');
-    if (idx) { idx.textContent = n; idx.setAttribute('aria-label', `Usuario ${n}`); }
+    if (label) { label.setAttribute('for', `user-input-${n}`); label.textContent = `Usuario ${n}`; }
+    if (idx) { idx.textContent = n; }
+    if (feedback) { feedback.id = `feedback-user-${n}`; }
     if (inp) {
       inp.id = `user-input-${n}`;
-      inp.setAttribute('aria-label', `URL de ${state.sourceMode === 'list' ? 'lista' : 'watchlist'} para usuario ${n}`);
+      inp.setAttribute('aria-label', `${state.sourceMode === 'list' ? 'URL de lista pública' : 'Usuario o URL de watchlist'} para persona ${n}`);
+      inp.setAttribute('aria-describedby', `feedback-user-${n}`);
     }
     if (btn) {
       btn.dataset.row = n;
       btn.disabled = n <= MIN_USERS;
+      btn.setAttribute('aria-label', `Eliminar usuario ${n}`);
     }
   });
   state.userCount = rows.length;
+  updateCompareButtonState();
 }
 
 function updateAddButton() {
@@ -239,19 +669,25 @@ function updateAddButton() {
 
 function switchSourceMode(mode) {
   state.sourceMode = mode;
-  const values = collectInputValues();
+  const inputs = $$('.user-input', usersContainer).map(inp => inp.value);
+  const rowCount = Math.max(MIN_USERS, inputs.length);
   usersContainer.innerHTML = '';
-  const count = values.length > 0 ? values.length : MIN_USERS;
-  for (let i = 0; i < count; i++) addUserRow(i + 1);
+  state.userCount = rowCount;
+  for (let i = 0; i < rowCount; i++) addUserRow(i + 1);
 
-  // Try to restore previous URL values when switching modes
-  values.forEach((v, i) => {
-    const inp = $(`#user-input-${i + 1}`);
-    // Keep if it's a letterboxd.com URL
-    if (inp && v && v.includes('letterboxd.com')) inp.value = v;
+  // Restore values and re-validate under new mode
+  inputs.forEach((v, i) => {
+    const row = usersContainer.querySelector(`[data-index="${i + 1}"]`);
+    const inp = row?.querySelector('.user-input');
+    if (inp && v) {
+      inp.value = v;
+      const res = validateInputValue(v, state.sourceMode);
+      applyValidationUI(row, res);
+    }
   });
 
   updateAddButton();
+  updateCompareButtonState();
 }
 
 function collectInputValues() {
@@ -278,6 +714,7 @@ function setupEventListeners() {
       addUserRow(count + 1);
       state.userCount = count + 1;
       updateAddButton();
+      updateCompareButtonState();
       $(`#user-input-${count + 1}`)?.focus();
     }
   });
@@ -286,6 +723,49 @@ function setupEventListeners() {
   usersContainer.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-remove');
     if (btn) removeUserRow(Number(btn.dataset.row));
+  });
+
+  // Clear inputs button (Feature 1)
+  btnClearInputs?.addEventListener('click', handleClearInputs);
+
+  // History panel toggle & controls (Feature 4)
+  btnToggleHistory?.addEventListener('click', toggleHistoryPanel);
+  btnCloseHistory?.addEventListener('click', closeHistoryPanel);
+  btnClearHistory?.addEventListener('click', () => {
+    comparisonHistory.clearAll();
+  });
+
+  // History list click delegation (load item or delete item)
+  historyList?.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.btn-remove-history');
+    if (deleteBtn) {
+      e.stopPropagation();
+      comparisonHistory.removeEntry(deleteBtn.dataset.id);
+      return;
+    }
+    const itemEl = e.target.closest('.history-item');
+    if (itemEl) {
+      loadHistoryItem(itemEl.dataset.id);
+    }
+  });
+
+  // History item keyboard navigation (Enter key to load)
+  historyList?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const itemEl = e.target.closest('.history-item');
+      if (itemEl && !e.target.closest('.btn-remove-history')) {
+        loadHistoryItem(itemEl.dataset.id);
+      }
+    }
+  });
+
+  // Close history panel on click outside or Escape
+  document.addEventListener('click', (e) => {
+    if (historyPanel && !historyPanel.classList.contains('hidden')) {
+      if (!historyPanel.contains(e.target) && !btnToggleHistory?.contains(e.target)) {
+        closeHistoryPanel();
+      }
+    }
   });
 
   // Compare
@@ -319,6 +799,7 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       closeModal();
       closeTop5();
+      closeHistoryPanel();
     }
   });
 
@@ -352,18 +833,21 @@ async function handleCompare() {
   const inputs = collectInputValues();
 
   if (inputs.length < MIN_USERS) {
-    showError(`⚠️ Necesitás ingresar al menos ${MIN_USERS} URLs de Letterboxd.`);
+    showError(`⚠️ Necesitás ingresar al menos ${MIN_USERS} usuarios o listas de Letterboxd.`);
     return;
   }
 
-  // Validate: both modes now require valid Letterboxd URLs
-  const invalid = inputs.filter(u => !isValidLetterboxdUrl(u));
-  if (invalid.length) {
+  // Validar entradas con la lógica de modos
+  const invalidInputs = [];
+  inputs.forEach(inpVal => {
+    const res = validateInputValue(inpVal, state.sourceMode);
+    if (!res.valid) invalidInputs.push({ val: inpVal, msg: res.message });
+  });
+
+  if (invalidInputs.length > 0) {
     showError(
-      `⚠️ URL(s) inválida(s): ${invalid.join(', ')}. ` +
-      (state.sourceMode === 'watchlist'
-        ? 'Usá el formato: https://letterboxd.com/usuario/watchlist/'
-        : 'Usá el formato: https://letterboxd.com/usuario/list/nombre-lista/')
+      `⚠️ Entrada(s) inválida(s): ` +
+      invalidInputs.map(item => `"${item.val}" (${item.msg})`).join(' · ')
     );
     return;
   }
@@ -389,7 +873,6 @@ async function handleCompare() {
     const results = await Promise.allSettled(pageUrls.map((url, i) =>
       sleep(i * 400).then(() => fetchAndParseList(url, userLabels[i]))
     ));
-
 
     const successful = [];
     const failed = [];
@@ -424,6 +907,14 @@ async function handleCompare() {
     const comparison = computeComparison(successful);
     state.lastResults = { comparison, userLabels: successful.map(s => s.label), common: comparison.common };
 
+    // Guardar en historial (Feature 1 & Feature 4)
+    comparisonHistory.saveEntry(
+      state.sourceMode,
+      inputs,
+      successful.map(s => s.label),
+      comparison.common.length
+    );
+
     renderResults(comparison, successful.map(s => s.label));
   } catch (err) {
     console.error('[handleCompare]', err);
@@ -431,6 +922,7 @@ async function handleCompare() {
     hideLoading();
   } finally {
     btnCompare.disabled = false;
+    updateCompareButtonState();
     hideLoading();
   }
 }
@@ -438,25 +930,65 @@ async function handleCompare() {
 // ─── URL NORMALIZER ───────────────────────────────────────────────────────────
 
 /**
- * Normalize a Letterboxd page URL (watchlist or list).
- * Strips any trailing /rss/ or /page/N/ suffixes and ensures a clean base URL.
- * Examples:
- *   https://letterboxd.com/user/list/mi-lista/      → kept as-is
+ * Normalize a Letterboxd page URL or username.
+ * Supports:
+ *   - usernames ("agusre" or "@agusre" in watchlist mode) -> "https://letterboxd.com/agusre/watchlist/"
+ *   - profile URLs ("https://letterboxd.com/agusre/" in watchlist mode) -> "https://letterboxd.com/agusre/watchlist/"
+ *   - list URLs ("https://letterboxd.com/user/list/name/") -> kept as-is
+ * Strips trailing /rss/ or /page/N/ and ensures trailing slash.
  */
 function normalizePageUrl(input) {
-  let url = input.trim();
+  let val = input.trim();
+  if (val.startsWith('letterboxd.com') || val.startsWith('www.letterboxd.com')) {
+    val = 'https://' + val;
+  }
+
+  // Si es solo username o @username
+  if (!val.includes('/') || (val.startsWith('@') && !val.includes('/'))) {
+    const clean = val.replace(/^@/, '').trim();
+    if (isValidUsername(clean)) {
+      return `https://letterboxd.com/${clean}/watchlist/`;
+    }
+  }
+
+  try {
+    const full = val.startsWith('http') ? val : `https://${val}`;
+    const u = new URL(full);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'letterboxd.com') {
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (state.sourceMode === 'watchlist') {
+        // Si el usuario puso su perfil (/agusre/) o ruta sin watchlist
+        if (parts.length >= 1 && parts[1] !== 'watchlist') {
+          return `https://letterboxd.com/${parts[0]}/watchlist/`;
+        }
+      }
+      let pathname = u.pathname;
+      if (!pathname.endsWith('/')) pathname += '/';
+      pathname = pathname.replace(/\/rss\/$/, '/').replace(/\/page\/\d+\/$/, '/');
+      return `https://letterboxd.com${pathname}`;
+    }
+  } catch { }
+
+  let url = val;
   if (!url.endsWith('/')) url += '/';
-  // Remove any /rss/ or /page/N/ if user accidentally pasted that
   url = url.replace(/\/rss\/$/, '/').replace(/\/page\/\d+\/$/, '/');
   return url;
 }
 
 function extractLabel(input) {
+  const val = input.trim();
+  if (!val.includes('/') || (val.startsWith('@') && !val.includes('/'))) {
+    return val.replace(/^@/, '');
+  }
   try {
-    const u = new URL(input);
+    const full = val.startsWith('http') ? val : `https://${val}`;
+    const u = new URL(full);
     const parts = u.pathname.split('/').filter(Boolean);
     return parts[0] || input;
-  } catch { return input; }
+  } catch {
+    return input;
+  }
 }
 
 // ─── HTML SCRAPING FETCH ──────────────────────────────────────────────────────
@@ -1702,30 +2234,6 @@ function hideError() {
   errorBanner.innerHTML = '';
 }
 
-// ─── VALIDATION ───────────────────────────────────────────────────────────────
-
-/**
- * Validates any public Letterboxd URL (watchlist, list, films, etc.)
- * Both modes now require a full letterboxd.com URL.
- */
-function isValidLetterboxdUrl(url) {
-  try {
-    const u = new URL(url.trim());
-    return u.hostname === 'letterboxd.com' && u.pathname.length > 1;
-  } catch { return false; }
-}
-
-// Kept for backwards compatibility but no longer used as primary validator
-function isValidUsername(name) {
-  return /^@?[a-zA-Z0-9._-]{1,60}$/.test(name.trim());
-}
-
-function isValidLetterboxdListUrl(url) {
-  try {
-    const u = new URL(url);
-    return u.hostname === 'letterboxd.com' && u.pathname.includes('/list/');
-  } catch { return false; }
-}
 
 // ─── SECURITY HELPERS ─────────────────────────────────────────────────────────
 

@@ -76,9 +76,40 @@
 
     <!-- INPUT CARD -->
     <section class="card input-card" aria-labelledby="form-title">
-      <h1 id="form-title" class="card-title">Comparar listas de Letterboxd</h1>
-      <p class="card-subtitle">Pegá la URL de la watchlist o lista de Letterboxd de cada persona (de 2 a 5). Las listas
-        deben ser públicas.</p>
+      <div class="card-header-row">
+        <div class="card-header-text">
+          <h1 id="form-title" class="card-title">Comparar listas de Letterboxd</h1>
+          <p class="card-subtitle">Ingresá los usuarios o URLs de Letterboxd de cada persona (de 2 a 5). Las listas deben ser públicas.</p>
+        </div>
+        <div class="card-header-actions">
+          <button id="btn-clear-inputs" class="btn-action-ghost" type="button" title="Limpiar todos los campos" aria-label="Limpiar todos los campos">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            <span>Limpiar</span>
+          </button>
+          <div class="history-dropdown-wrapper">
+            <button id="btn-toggle-history" class="btn-action-ghost" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="history-panel" aria-label="Historial de comparaciones">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span>Historial</span>
+              <span id="history-badge" class="history-badge hidden">0</span>
+            </button>
+            <div id="history-panel" class="history-panel hidden" role="region" aria-label="Historial de comparaciones">
+              <div class="history-panel-header">
+                <span class="history-panel-title">Comparaciones recientes</span>
+                <button id="btn-close-history" class="btn-icon-xs" type="button" aria-label="Cerrar historial">✕</button>
+              </div>
+              <div id="history-list" class="history-list" role="list"></div>
+              <div class="history-panel-footer">
+                <button id="btn-clear-history" class="btn-link-danger" type="button">Borrar todo el historial</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Source selector -->
       <div class="source-selector" role="group" aria-label="Seleccionar fuente de datos">
