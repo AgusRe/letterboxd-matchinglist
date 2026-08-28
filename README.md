@@ -108,14 +108,6 @@ GitHub Pages y los navegadores cachean `app.js` de forma agresiva. Si después d
 <script src="app.js?v=2"></script>
 ```
 
-### Cache-busting al editar `app.js`
-
-GitHub Pages y los navegadores cachean `app.js` de forma agresiva. Si después de un `git push` los cambios no se reflejan, subí el número de versión en `index.html`:
-
-```html
-<script src="app.js?v=4"></script>
-```
-
 Esto fuerza a que se descargue la versión nueva en vez de servir una copia vieja en caché.
 
 ---

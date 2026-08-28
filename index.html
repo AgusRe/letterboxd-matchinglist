@@ -185,6 +185,10 @@
         <span class="spinner" aria-hidden="true"></span>
         <span id="loading-message">Obteniendo feeds de Letterboxd…</span>
       </p>
+      <div id="proxy-live-banner" class="proxy-live-banner hidden" aria-live="polite">
+        <span class="proxy-live-icon">📡</span>
+        <span id="proxy-live-text" class="proxy-live-text"></span>
+      </div>
     </section>
 
     <!-- RESULTS SECTION -->
@@ -235,9 +239,13 @@
 
   <!-- ─── FOOTER ─── -->
   <footer class="site-footer">
-    <div class="container">
+    <div class="container footer-content">
       <p>Hecho con <span aria-label="amor">❤️</span> para cinéfilos · Los datos son públicos vía RSS de <a
           href="https://letterboxd.com" target="_blank" rel="noopener noreferrer">Letterboxd</a></p>
+      <div id="proxy-health-indicator" class="proxy-health-indicator" title="Estado de conectividad y proxies CORS">
+        <span class="proxy-health-dot dot-green" id="proxy-health-dot"></span>
+        <span id="proxy-health-label">Conexión: Lista</span>
+      </div>
     </div>
   </footer>
 

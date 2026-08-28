@@ -23,9 +23,9 @@
 const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 const PROXIES = [
-  ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text' }] : []),
-  { url: 'https://letterboxd-proxy.agustin2-re.workers.dev/?url=', mode: 'text' },
-  { url: 'https://api.allorigins.win/raw?url=', mode: 'text' },
+  ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text', name: 'Localhost (Node)' }] : []),
+  { url: 'https://letterboxd-proxy.agustin2-re.workers.dev/?url=', mode: 'text', name: 'Cloudflare Worker' },
+  { url: 'https://api.allorigins.win/raw?url=', mode: 'text', name: 'AllOrigins' },
 ];
 // ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
 
@@ -187,6 +187,10 @@ const state = {
   lastResults: null,
   sortCommonAsc: true,
   forceRefresh: false,     // true → bypass cache (set via "Forzar actualización" checkbox)
+  userResults: {},         // memoria de fetches exitosos: { [url]: { label, url, movies } }
+  currentSearchId: 0,      // token de generación para búsquedas (evita AbortController)
+  activeFetches: {},       // token activo por fila: { [rowIndex]: fetchId }
+  lastSuccessfulProxy: null,
 };
 
 /** State for the Top 5 Eliminator mode */
@@ -215,6 +219,11 @@ const btnClearHistory = $('#btn-clear-history');
 const errorBanner = $('#error-banner');
 const loadingSection = $('#loading-section');
 const loadingMessage = $('#loading-message');
+const proxyLiveBanner = $('#proxy-live-banner');
+const proxyLiveText = $('#proxy-live-text');
+const proxyHealthIndicator = $('#proxy-health-indicator');
+const proxyHealthDot = $('#proxy-health-dot');
+const proxyHealthLabel = $('#proxy-health-label');
 const resultsSection = $('#results-section');
 const statsBar = $('#stats-bar');
 const commonGrid = $('#common-grid');
@@ -551,9 +560,101 @@ function preloadLastSearch() {
 function handleClearInputs() {
   buildUserRows(MIN_USERS);
   hideError();
+  state.userResults = {};
+  clearAllRowStatuses();
   updateCompareButtonState();
   const firstInp = $(`#user-input-1`);
   if (firstInp) firstInp.focus();
+}
+
+// ─── ROW STATUS HELPERS (RETRY SELECTIVO) ────────────────────────────────────
+
+function setRowStatus(rowIndex, status, message = '', showRetry = false) {
+  const row = usersContainer.querySelector(`[data-index="${rowIndex}"]`);
+  if (!row) return;
+  const statusBar = row.querySelector('.row-status-bar');
+  const statusText = row.querySelector('.row-status-text');
+  const btnRetry = row.querySelector('.btn-retry-user');
+
+  if (!statusBar || !statusText || !btnRetry) return;
+
+  if (status === 'idle') {
+    statusBar.classList.add('hidden');
+    statusText.textContent = '';
+    btnRetry.classList.add('hidden');
+    return;
+  }
+
+  statusBar.className = `row-status-bar status-${status}`;
+  statusBar.classList.remove('hidden');
+  statusText.textContent = message;
+
+  if (showRetry) {
+    btnRetry.classList.remove('hidden');
+    btnRetry.disabled = false;
+  } else {
+    btnRetry.classList.add('hidden');
+  }
+}
+
+function clearAllRowStatuses() {
+  const rows = $$('.user-row', usersContainer);
+  rows.forEach(row => {
+    const statusBar = row.querySelector('.row-status-bar');
+    const statusText = row.querySelector('.row-status-text');
+    const btnRetry = row.querySelector('.btn-retry-user');
+    if (statusBar) statusBar.classList.add('hidden');
+    if (statusText) statusText.textContent = '';
+    if (btnRetry) btnRetry.classList.add('hidden');
+  });
+}
+
+// ─── PROXY HEALTH REPORTING ──────────────────────────────────────────────────
+
+function reportProxyStatus({ user = '', name = '', host = '', status = 'attempt', error = '', elapsed = 0 }) {
+  const label = name || host;
+  const liveBanner = $('#proxy-live-banner');
+  const liveText = $('#proxy-live-text');
+
+  if (liveBanner && liveText) {
+    if (status === 'attempt') {
+      liveBanner.classList.remove('hidden');
+      liveText.textContent = user ? `${user}: conectando vía ${label}…` : `Conectando vía ${label}…`;
+    } else if (status === 'fallback') {
+      liveBanner.classList.remove('hidden');
+      liveText.textContent = user ? `⚠️ ${user}: ${label} no respondió, probando alternativa…` : `⚠️ ${label} no respondió, probando fallback…`;
+    } else if (status === 'success') {
+      liveBanner.classList.remove('hidden');
+      liveText.textContent = user ? `✅ ${user}: datos recibidos vía ${label} (${elapsed}ms)` : `✅ Conectado vía ${label} (${elapsed}ms)`;
+    }
+  }
+
+  if (status === 'success') {
+    updateFooterProxyHealth(label, elapsed);
+  }
+}
+
+function updateFooterProxyHealth(proxyName, elapsed) {
+  const dot = $('#proxy-health-dot');
+  const label = $('#proxy-health-label');
+  const pill = $('#proxy-health-indicator');
+  if (!dot || !label) return;
+
+  dot.className = 'proxy-health-dot dot-green';
+  label.textContent = `Proxy activo: ${proxyName}${elapsed ? ` (${elapsed}ms)` : ''}`;
+  if (pill) {
+    pill.title = `Último proxy exitoso: ${proxyName} · Latencia: ${elapsed}ms`;
+  }
+}
+
+function initProxyHealthUI() {
+  const label = $('#proxy-health-label');
+  const dot = $('#proxy-health-dot');
+  if (!label || !dot) return;
+
+  const defaultProxy = PROXIES[0]?.name || 'Cloudflare Worker';
+  dot.className = 'proxy-health-dot dot-green';
+  label.textContent = `Proxy: ${defaultProxy}`;
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
@@ -562,6 +663,7 @@ function init() {
   buildUserRows(MIN_USERS);
   setupEventListeners();
   initHistoryUI();
+  initProxyHealthUI();
   preloadLastSearch();
 }
 
@@ -603,6 +705,18 @@ function addUserRow(index) {
         <span class="input-validation-icon" aria-hidden="true"></span>
       </div>
       <div class="input-feedback-msg hidden" id="feedback-user-${index}" role="alert"></div>
+      <div class="row-status-bar hidden" id="status-bar-${index}">
+        <span class="row-status-text" id="status-text-${index}"></span>
+        <button type="button" class="btn-retry-user hidden" id="btn-retry-${index}" data-row="${index}" aria-label="Reintentar usuario ${index}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M3 21v-5h5"/>
+          </svg>
+          Reintentar
+        </button>
+      </div>
     </div>
     <button class="btn-remove" data-row="${index}" aria-label="Eliminar usuario ${index}" ${index <= MIN_USERS ? 'disabled' : ''}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -642,10 +756,20 @@ function renumberRows() {
     const idx = row.querySelector('.user-index');
     const inp = row.querySelector('.user-input');
     const feedback = row.querySelector('.input-feedback-msg');
+    const statusBar = row.querySelector('.row-status-bar');
+    const statusText = row.querySelector('.row-status-text');
+    const btnRetry = row.querySelector('.btn-retry-user');
     const btn = row.querySelector('.btn-remove');
     if (label) { label.setAttribute('for', `user-input-${n}`); label.textContent = `Usuario ${n}`; }
     if (idx) { idx.textContent = n; }
     if (feedback) { feedback.id = `feedback-user-${n}`; }
+    if (statusBar) { statusBar.id = `status-bar-${n}`; }
+    if (statusText) { statusText.id = `status-text-${n}`; }
+    if (btnRetry) {
+      btnRetry.id = `btn-retry-${n}`;
+      btnRetry.dataset.row = n;
+      btnRetry.setAttribute('aria-label', `Reintentar usuario ${n}`);
+    }
     if (inp) {
       inp.id = `user-input-${n}`;
       inp.setAttribute('aria-label', `${state.sourceMode === 'list' ? 'URL de lista pública' : 'Usuario o URL de watchlist'} para persona ${n}`);
@@ -719,10 +843,13 @@ function setupEventListeners() {
     }
   });
 
-  // Remove user (event delegation)
+  // Remove user & retry user (event delegation)
   usersContainer.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-remove');
-    if (btn) removeUserRow(Number(btn.dataset.row));
+    const removeBtn = e.target.closest('.btn-remove');
+    if (removeBtn) removeUserRow(Number(removeBtn.dataset.row));
+
+    const retryBtn = e.target.closest('.btn-retry-user');
+    if (retryBtn) handleRetryUser(Number(retryBtn.dataset.row));
   });
 
   // Clear inputs button (Feature 1)
@@ -830,18 +957,33 @@ function setupEventListeners() {
 
 async function handleCompare() {
   hideError();
-  const inputs = collectInputValues();
+  const rows = $$('.user-row', usersContainer);
+  const inputData = [];
 
-  if (inputs.length < MIN_USERS) {
+  rows.forEach((row, i) => {
+    const idx = i + 1;
+    const inp = row.querySelector('.user-input');
+    const val = inp?.value.trim() || '';
+    if (val) {
+      inputData.push({
+        rowIndex: idx,
+        rawInput: val,
+        pageUrl: normalizePageUrl(val),
+        label: extractLabel(val),
+      });
+    }
+  });
+
+  if (inputData.length < MIN_USERS) {
     showError(`⚠️ Necesitás ingresar al menos ${MIN_USERS} usuarios o listas de Letterboxd.`);
     return;
   }
 
   // Validar entradas con la lógica de modos
   const invalidInputs = [];
-  inputs.forEach(inpVal => {
-    const res = validateInputValue(inpVal, state.sourceMode);
-    if (!res.valid) invalidInputs.push({ val: inpVal, msg: res.message });
+  inputData.forEach(item => {
+    const res = validateInputValue(item.rawInput, state.sourceMode);
+    if (!res.valid) invalidInputs.push({ val: item.rawInput, msg: res.message });
   });
 
   if (invalidInputs.length > 0) {
@@ -854,76 +996,176 @@ async function handleCompare() {
 
   showLoading();
   btnCompare.disabled = true;
+  state.currentSearchId = Date.now();
+  const searchId = state.currentSearchId;
+
+  // Iniciar estado de carga por fila
+  inputData.forEach(item => {
+    setRowStatus(item.rowIndex, 'loading', `Cargando "${item.label}"…`, false);
+  });
 
   try {
-    const pageUrls = inputs.map(input => normalizePageUrl(input));
-    const userLabels = inputs.map(input => extractLabel(input));
-
-    updateLoadingMessage(`Obteniendo datos de ${inputs.length} lista(s)…`);
+    updateLoadingMessage(`Obteniendo datos de ${inputData.length} lista(s)…`);
 
     // If forceRefresh is set, evict cached entries before fetching
     if (state.forceRefresh) {
-      pageUrls.forEach(url => letterboxdCache.invalidate(url));
-      console.log('[Cache] Force refresh — invalidated', pageUrls.length, 'entries');
+      inputData.forEach(item => {
+        letterboxdCache.invalidate(item.pageUrl);
+        delete state.userResults[item.pageUrl];
+      });
+      console.log('[Cache] Force refresh — invalidated', inputData.length, 'entries');
     }
 
     // Escalonamos el arranque de cada usuario (400ms entre uno y otro) para no
-    // saturar de golpe al único proxy CORS confiable (allorigins.win) cuando
-    // hay varios usuarios en la comparación.
-    const results = await Promise.allSettled(pageUrls.map((url, i) =>
-      sleep(i * 400).then(() => fetchAndParseList(url, userLabels[i]))
+    // saturar de golpe al proxy cuando hay varios usuarios.
+    const results = await Promise.allSettled(inputData.map((item, i) =>
+      sleep(i * 400).then(() => {
+        if (searchId !== state.currentSearchId) return null;
+        return fetchAndParseList(item.pageUrl, item.label, searchId);
+      })
     ));
+
+    // Si la búsqueda fue cancelada o superada por una nueva, salir
+    if (searchId !== state.currentSearchId) return;
 
     const successful = [];
     const failed = [];
     const failReasons = [];
 
     results.forEach((result, i) => {
-      if (result.status === 'fulfilled' && result.value) {
-        successful.push({ label: userLabels[i], movies: result.value });
+      const item = inputData[i];
+      if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+        successful.push({ label: item.label, url: item.pageUrl, movies: result.value, rowIndex: item.rowIndex });
+        state.userResults[item.pageUrl] = { label: item.label, url: item.pageUrl, movies: result.value };
+        setRowStatus(item.rowIndex, 'success', `✅ ${result.value.length} películas cargadas`, false);
       } else {
-        failed.push(userLabels[i]);
-        failReasons.push(result.reason?.message || 'Error desconocido');
-        console.error(`Failed user ${userLabels[i]}:`, result.reason);
+        const reason = result.reason?.message || (result.value && result.value.length === 0 ? 'La lista está vacía o es privada' : 'Error al obtener datos');
+        failed.push({ label: item.label, url: item.pageUrl, rowIndex: item.rowIndex, error: reason });
+        failReasons.push(`${item.label}: ${reason}`);
+        setRowStatus(item.rowIndex, 'error', `❌ ${reason}`, true);
+        console.error(`Failed user ${item.label}:`, result.reason || 'No films found');
       }
     });
 
-    if (successful.length < MIN_USERS) {
-      const detail = failReasons.length ? `\n\nDetalle: ${failReasons.join(' | ')}` : '';
-      throw new Error(
-        `No se pudieron obtener datos de suficientes listas. Fallaron: ${failed.join(', ')}.\n` +
-        `Verificá que las URLs sean correctas, que las listas sean públicas y que el usuario exista en Letterboxd.` +
-        detail
+    if (successful.length >= MIN_USERS) {
+      updateLoadingMessage('Calculando coincidencias…');
+      await sleep(250);
+
+      const comparison = computeComparison(successful);
+      state.lastResults = { comparison, userLabels: successful.map(s => s.label), common: comparison.common };
+
+      // Guardar en historial (Feature 1 & Feature 4)
+      comparisonHistory.saveEntry(
+        state.sourceMode,
+        inputData.map(d => d.rawInput),
+        successful.map(s => s.label),
+        comparison.common.length
       );
+
+      renderResults(comparison, successful.map(s => s.label));
+
+      if (failed.length > 0) {
+        showError(
+          `⚠️ Resultados parciales para: ${successful.map(s => s.label).join(', ')}. ` +
+          `No se pudo cargar: ${failed.map(f => f.label).join(', ')}. Podés reintentar en su fila correspondiente.`
+        );
+      }
+    } else {
+      if (successful.length === 1) {
+        showError(
+          `⚠️ Se cargaron los datos de "${successful[0].label}", pero se necesitan al menos ${MIN_USERS} listas para comparar. ` +
+          `Reintentá la lista fallida arriba con el botón "Reintentar".`
+        );
+      } else {
+        showError(
+          `❌ No se pudieron obtener datos de suficientes listas.\n` +
+          `Verificá que las URLs sean correctas, que las listas sean públicas y reintentá individualmente en cada fila.`
+        );
+      }
     }
-
-    if (failed.length > 0) {
-      showError(`⚠️ No se pudieron cargar los datos de: ${failed.join(', ')}. Los resultados son parciales.`);
-    }
-
-    updateLoadingMessage('Calculando coincidencias…');
-    await sleep(300);
-
-    const comparison = computeComparison(successful);
-    state.lastResults = { comparison, userLabels: successful.map(s => s.label), common: comparison.common };
-
-    // Guardar en historial (Feature 1 & Feature 4)
-    comparisonHistory.saveEntry(
-      state.sourceMode,
-      inputs,
-      successful.map(s => s.label),
-      comparison.common.length
-    );
-
-    renderResults(comparison, successful.map(s => s.label));
   } catch (err) {
     console.error('[handleCompare]', err);
     showError(`❌ ${err.message}`);
-    hideLoading();
   } finally {
     btnCompare.disabled = false;
     updateCompareButtonState();
     hideLoading();
+  }
+}
+
+// ─── RETRY SELECTIVO POR USUARIO (Feature 2) ──────────────────────────────────
+
+async function handleRetryUser(rowIndex) {
+  const row = usersContainer.querySelector(`[data-index="${rowIndex}"]`);
+  if (!row) return;
+
+  const inp = row.querySelector('.user-input');
+  const val = inp?.value.trim() || '';
+  if (!val) return;
+
+  const pageUrl = normalizePageUrl(val);
+  const label = extractLabel(val);
+
+  // 1) Requisito clave: el botón "Reintentar" invalida la caché de ESE usuario específicamente
+  letterboxdCache.invalidate(pageUrl);
+  console.log(`[Cache] 🔄 Invalidadas entradas para retry de "${label}" (${pageUrl})`);
+
+  setRowStatus(rowIndex, 'loading', `Reintentando "${label}"…`, false);
+
+  const fetchId = Date.now();
+  state.activeFetches[rowIndex] = fetchId;
+
+  try {
+    const movies = await fetchAndParseList(pageUrl, label, null, fetchId);
+
+    // Si hubo otra acción o cancelación en esta fila, salir
+    if (state.activeFetches[rowIndex] !== fetchId) return;
+
+    if (!movies || movies.length === 0) {
+      throw new Error('No se encontraron películas. Verificá que la lista sea pública.');
+    }
+
+    // Éxito en la fila
+    setRowStatus(rowIndex, 'success', `✅ ${movies.length} películas cargadas`, false);
+    state.userResults[pageUrl] = { label, url: pageUrl, movies };
+
+    // Buscar todos los usuarios actualmente en inputs que tengan datos exitosos en memoria
+    const currentRows = $$('.user-row', usersContainer);
+    const allSuccessful = [];
+    const allLabels = [];
+    const allRawInputs = [];
+
+    currentRows.forEach(r => {
+      const rInp = r.querySelector('.user-input');
+      const rVal = rInp?.value.trim() || '';
+      if (rVal) {
+        allRawInputs.push(rVal);
+        const rUrl = normalizePageUrl(rVal);
+        if (state.userResults[rUrl]?.movies?.length > 0) {
+          allSuccessful.push(state.userResults[rUrl]);
+          allLabels.push(state.userResults[rUrl].label);
+        }
+      }
+    });
+
+    if (allSuccessful.length >= MIN_USERS) {
+      hideError();
+      const comparison = computeComparison(allSuccessful);
+      state.lastResults = { comparison, userLabels: allLabels, common: comparison.common };
+
+      comparisonHistory.saveEntry(
+        state.sourceMode,
+        allRawInputs,
+        allLabels,
+        comparison.common.length
+      );
+
+      renderResults(comparison, allLabels);
+    }
+  } catch (err) {
+    if (state.activeFetches[rowIndex] !== fetchId) return;
+    console.error(`[Retry] Falló reintento para ${label}:`, err);
+    setRowStatus(rowIndex, 'error', `❌ ${err.message}`, true);
   }
 }
 
@@ -1010,13 +1252,14 @@ function extractLabel(input) {
  *   4. Paginate until an empty page or fewer-than-full-page response.
  *   5. On success, persist to cache.
  */
-async function fetchAndParseList(baseUrl, label) {
+async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null) {
   // ── Cache lookup ────────────────────────────────────────────────────────────
   const cached = letterboxdCache.get(baseUrl);
   if (cached) {
     console.log(`[Cache] ⚡ Hit for "${label}" (${cached.length} films)`);
     updateLoadingMessage(`⚡ "${label}" cargado desde caché (${cached.length} películas)`);
-    await sleep(200); // brief pause so user sees the message
+    reportProxyStatus({ user: label, status: 'success', name: 'Caché local', elapsed: 0 });
+    await sleep(150);
     return cached;
   }
 
@@ -1026,17 +1269,22 @@ async function fetchAndParseList(baseUrl, label) {
   let perPage = null;
 
   while (hasMore && page <= 30) {
+    // Check flags without AbortController
+    if (searchId && searchId !== state.currentSearchId) return null;
+    if (fetchId && Object.values(state.activeFetches).length > 0 && !Object.values(state.activeFetches).includes(fetchId)) return null;
+
     const pageUrl = page === 1 ? baseUrl : `${baseUrl}page/${page}/`;
     updateLoadingMessage(`Obteniendo datos de "${label}" — página ${page}…`);
 
     let html;
     try {
-      html = await fetchViaFastestProxy(pageUrl);
+      html = await fetchViaFastestProxy(pageUrl, 12000, label);
     } catch (firstErr) {
       console.warn(`[${label}] p${page} falló, reintentando en 1s…`);
+      reportProxyStatus({ user: label, status: 'fallback', name: 'Reintento p' + page });
       await sleep(1000);
       try {
-        html = await fetchViaFastestProxy(pageUrl);
+        html = await fetchViaFastestProxy(pageUrl, 12000, label);
       } catch (err) {
         if (page === 1) {
           throw new Error(
@@ -1128,21 +1376,21 @@ function fetchWithTimeout(url, timeout = 8000) {
  *
  * Uses Promise.any() which:
  *   - Resolves as soon as ANY promise resolves
- *   - Rejects only when ALL promises reject (AggregateError)
+ *   - Rejects only when ALL proxies reject (AggregateError)
  */
-async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
+async function fetchViaFastestProxy(targetUrl, timeout = 12000, label = '') {
   const [primary, ...fallbacks] = PROXIES;
 
-  // 1) Intentamos SOLO el proxy principal (tu Worker / localhost en dev).
-  //    Si funciona (que es el 99% de los casos), no tocamos los públicos
-  //    y la consola queda limpia.
+  // 1) Intentamos SOLO el proxy principal (Worker propio o localhost en dev)
   try {
-    return await attemptProxy(primary, targetUrl, timeout);
+    reportProxyStatus({ user: label, status: 'attempt', name: primary.name, host: primary.url.split('/')[2] });
+    return await attemptProxy(primary, targetUrl, timeout, label);
   } catch (err) {
-    console.warn(`[Proxy] ⚠️ Proxy principal falló (${primary.url.split('/')[2]}), probando fallbacks…`);
+    console.warn(`[Proxy] ⚠️ Proxy principal falló (${primary.name || primary.url.split('/')[2]}), probando fallbacks…`);
+    reportProxyStatus({ user: label, status: 'fallback', name: primary.name, host: primary.url.split('/')[2], error: err.message });
   }
 
-  // 2) Solo si el principal falla, recién ahí recurrimos a los públicos.
+  // 2) Solo si el principal falla, recién ahí recurrimos a los públicos
   if (fallbacks.length === 0) {
     throw new Error(
       `Todos los proxies CORS fallaron para esta petición.\n` +
@@ -1152,7 +1400,10 @@ async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
   }
 
   try {
-    return await Promise.any(fallbacks.map(proxy => attemptProxy(proxy, targetUrl, timeout)));
+    return await Promise.any(fallbacks.map(proxy => {
+      reportProxyStatus({ user: label, status: 'attempt', name: proxy.name, host: proxy.url.split('/')[2] });
+      return attemptProxy(proxy, targetUrl, timeout, label);
+    }));
   } catch {
     throw new Error(
       `Todos los proxies CORS fallaron para esta petición.\n` +
@@ -1167,9 +1418,10 @@ async function fetchViaFastestProxy(targetUrl, timeout = 12000) {
  * Extraído de fetchViaFastestProxy para poder reusarlo en el intento
  * principal y en los fallbacks sin duplicar código.
  */
-async function attemptProxy(proxy, targetUrl, timeout) {
+async function attemptProxy(proxy, targetUrl, timeout, label = '') {
   const proxyUrl = `${proxy.url}${encodeURIComponent(targetUrl)}`;
   const host = proxy.url.split('/')[2];
+  const proxyName = proxy.name || host;
   const t0 = Date.now();
 
   try {
@@ -1192,11 +1444,13 @@ async function attemptProxy(proxy, targetUrl, timeout) {
     const elapsed = Date.now() - t0;
     if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
     _proxySpeedLog[host].push(elapsed);
-    console.log(`[Proxy] ✅ ${host} — ${elapsed}ms (${html.length} chars)`);
+    console.log(`[Proxy] ✅ ${proxyName} — ${elapsed}ms (${html.length} chars)`);
+
+    reportProxyStatus({ user: label, status: 'success', name: proxyName, host, elapsed });
 
     return html;
   } catch (err) {
-    console.warn(`[Proxy] ❌ ${host} — ${err.message}`);
+    console.warn(`[Proxy] ❌ ${proxyName} — ${err.message}`);
     throw err;
   }
 }
@@ -2213,6 +2467,8 @@ function showLoading() {
 
 function hideLoading() {
   loadingSection.classList.add('hidden');
+  const liveBanner = $('#proxy-live-banner');
+  if (liveBanner) liveBanner.classList.add('hidden');
 }
 
 function updateLoadingMessage(msg) {
