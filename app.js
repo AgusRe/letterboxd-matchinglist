@@ -235,6 +235,9 @@ const movieModal = $('#movie-modal');
 const modalContent = $('#modal-content');
 const modalCloseBtn = $('#modal-close-btn');
 const btnSortCommon = $('#btn-sort-common');
+const btnExportCsv = $('#btn-export-csv');
+const btnShareResults = $('#btn-share-results');
+const shareBtnText = $('#share-btn-text');
 
 // ── Top 5 Eliminator DOM refs (resolved lazily so they exist after HTML parse) ──
 const top5Overlay = () => $('#top5-overlay');
@@ -563,8 +566,152 @@ function handleClearInputs() {
   state.userResults = {};
   clearAllRowStatuses();
   updateCompareButtonState();
+  try {
+    window.history.replaceState({}, '', window.location.pathname);
+  } catch {}
   const firstInp = $(`#user-input-1`);
   if (firstInp) firstInp.focus();
+}
+
+// ─── SHARING & CSV EXPORT (Feature 3 & Feature 5) ────────────────────────────
+
+function updateUrlParams(mode, rawInputs) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', mode);
+    url.searchParams.set('u', rawInputs.filter(Boolean).join(','));
+    window.history.replaceState({ mode, inputs: rawInputs }, '', url.toString());
+  } catch (e) {
+    console.warn('[URL] Could not update params:', e);
+  }
+}
+
+function parseUrlParamsOnLoad() {
+  try {
+    const url = new URL(window.location.href);
+    const mode = url.searchParams.get('mode');
+    const uParam = url.searchParams.get('u') || url.searchParams.get('users');
+    if (!uParam) return false;
+
+    const userList = uParam.split(',').map(s => s.trim()).filter(Boolean);
+    if (userList.length < MIN_USERS) return false;
+
+    if (mode === 'list' || mode === 'watchlist') {
+      state.sourceMode = mode;
+      const radio = $(`input[name="source"][value="${mode}"]`);
+      if (radio) radio.checked = true;
+    }
+
+    const count = Math.min(MAX_USERS, Math.max(MIN_USERS, userList.length));
+    usersContainer.innerHTML = '';
+    state.userCount = count;
+    for (let i = 0; i < count; i++) {
+      addUserRow(i + 1);
+      const row = usersContainer.querySelector(`[data-index="${i + 1}"]`);
+      const inp = row?.querySelector('.user-input');
+      if (inp && userList[i]) {
+        inp.value = userList[i];
+        const res = validateInputValue(inp.value, state.sourceMode);
+        applyValidationUI(row, res);
+      }
+    }
+    updateAddButton();
+    updateCompareButtonState();
+
+    // Auto-ejecutar la comparación si se cargó por URL con inputs válidos
+    setTimeout(() => {
+      handleCompare();
+    }, 350);
+
+    return true;
+  } catch (e) {
+    console.warn('[URL] Error parsing params:', e);
+    return false;
+  }
+}
+
+async function handleCopyShareLink() {
+  const shareBtn = $('#btn-share-results');
+  const shareText = $('#share-btn-text');
+  if (!shareBtn) return;
+
+  const url = window.location.href;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      textArea.remove();
+    }
+
+    shareBtn.classList.add('is-copied');
+    if (shareText) shareText.textContent = '¡Copiado! ✓';
+    setTimeout(() => {
+      shareBtn.classList.remove('is-copied');
+      if (shareText) shareText.textContent = 'Copiar link';
+    }, 2200);
+  } catch (err) {
+    console.error('[Share] Copy failed:', err);
+    alert(`Link de comparación:\n${url}`);
+  }
+}
+
+function exportCommonMoviesToCsv() {
+  if (!state.lastResults || !state.lastResults.common || state.lastResults.common.length === 0) {
+    showError('No hay películas en común para exportar.');
+    return;
+  }
+
+  const movies = state.lastResults.common;
+  const userLabels = state.lastResults.userLabels || [];
+  const usersStr = userLabels.join(', ');
+
+  const headers = ['Título', 'Año', 'En común con', 'Enlace Letterboxd'];
+
+  const escapeCsvCell = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = movies.map(movie => {
+    const title = movie.title || '';
+    const year = movie.year || '';
+    const foundIn = movie.foundIn && movie.foundIn.length > 0 ? movie.foundIn.join(', ') : usersStr;
+    const link = movie.link || (movie.id ? `https://letterboxd.com/film/${movie.id}/` : '');
+    return [
+      escapeCsvCell(title),
+      escapeCsvCell(year),
+      escapeCsvCell(foundIn),
+      escapeCsvCell(link)
+    ].join(',');
+  });
+
+  // UTF-8 BOM (\uFEFF) para que Excel abra correctamente tildes, ñ y caracteres especiales
+  const csvContent = '\uFEFF' + [headers.map(escapeCsvCell).join(','), ...rows].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+
+  const sanitizedUsers = userLabels.map(u => u.replace(/[^a-zA-Z0-9_-]/g, '')).join('_').slice(0, 40) || 'letterboxd';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = `letterboxd_match_${sanitizedUsers}_${dateStr}.csv`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(downloadUrl);
 }
 
 // ─── ROW STATUS HELPERS (RETRY SELECTIVO) ────────────────────────────────────
@@ -664,7 +811,10 @@ function init() {
   setupEventListeners();
   initHistoryUI();
   initProxyHealthUI();
-  preloadLastSearch();
+  const loadedFromUrl = parseUrlParamsOnLoad();
+  if (!loadedFromUrl) {
+    preloadLastSearch();
+  }
 }
 
 // ─── USER ROWS ───────────────────────────────────────────────────────────────
@@ -912,10 +1062,16 @@ function setupEventListeners() {
   }
 
   // Sort common
-  btnSortCommon.addEventListener('click', () => {
+  btnSortCommon?.addEventListener('click', () => {
     state.sortCommonAsc = !state.sortCommonAsc;
     if (state.lastResults) renderCommonMovies(state.lastResults.common);
   });
+
+  // Export CSV (Feature 5)
+  btnExportCsv?.addEventListener('click', exportCommonMoviesToCsv);
+
+  // Share results URL (Feature 3)
+  btnShareResults?.addEventListener('click', handleCopyShareLink);
 
   // Modal close
   modalCloseBtn.addEventListener('click', closeModal);
@@ -1063,6 +1219,7 @@ async function handleCompare() {
       );
 
       renderResults(comparison, successful.map(s => s.label));
+      updateUrlParams(state.sourceMode, inputData.map(d => d.rawInput));
 
       if (failed.length > 0) {
         showError(
@@ -1161,6 +1318,7 @@ async function handleRetryUser(rowIndex) {
       );
 
       renderResults(comparison, allLabels);
+      updateUrlParams(state.sourceMode, allRawInputs);
     }
   } catch (err) {
     if (state.activeFetches[rowIndex] !== fetchId) return;
@@ -1813,6 +1971,19 @@ function renderUniqueTabs(uniqueByUser, allUsers) {
     tab.setAttribute('aria-controls', `panel-${i}`);
     tab.id = `tab-${i}`;
     tab.addEventListener('click', () => switchTab(i));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const next = (i + 1) % allUsers.length;
+        $(`#tab-${next}`)?.focus();
+        switchTab(next);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prev = (i - 1 + allUsers.length) % allUsers.length;
+        $(`#tab-${prev}`)?.focus();
+        switchTab(prev);
+      }
+    });
     uniqueTabs.appendChild(tab);
 
     // Panel
@@ -2253,7 +2424,9 @@ function renderTop5Cards(movies) {
     const card = document.createElement('div');
     card.className = 'top5-card';
     card.dataset.id = movie.id;
-    card.setAttribute('role', 'listitem');
+    card.setAttribute('role', 'article');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `${movie.title}${movie.year ? ` (${movie.year})` : ''}. Presioná Supr, Retroceso o Espacio para eliminar.`);
 
     // Poster
     const posterHtml = movie.poster
@@ -2288,11 +2461,43 @@ function renderTop5Cards(movies) {
         <div class="top5-card-title">${escapeHtml(movie.title)}</div>
         ${movie.year ? `<div class="top5-card-year">${movie.year}</div>` : ''}
       </div>
-      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="Eliminar ${escapeHtml(movie.title)}">×</button>
+      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="Eliminar ${escapeHtml(movie.title)}" tabindex="0">×</button>
     `;
+
+    // Soporte accesible de teclado por tarjeta
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Delete' || e.key === 'Backspace' || e.key === ' ') {
+        e.preventDefault();
+        eliminateTop5Card(movie.id);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusNextTop5Card(card, 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusNextTop5Card(card, -1);
+      }
+    });
 
     grid.appendChild(card);
   });
+
+  // Foco inicial en la primera tarjeta para accesibilidad
+  setTimeout(() => {
+    const firstCard = grid.querySelector('.top5-card');
+    if (firstCard) firstCard.focus();
+  }, 100);
+}
+
+function focusNextTop5Card(currentCard, direction = 1) {
+  const cards = [...top5Grid().querySelectorAll('.top5-card:not(.eliminating)')];
+  if (cards.length === 0) return;
+  const currentIdx = cards.indexOf(currentCard);
+  if (currentIdx === -1) {
+    cards[0]?.focus();
+    return;
+  }
+  const nextIdx = (currentIdx + direction + cards.length) % cards.length;
+  cards[nextIdx]?.focus();
 }
 
 /**
@@ -2301,6 +2506,12 @@ function renderTop5Cards(movies) {
 function eliminateTop5Card(movieId) {
   const card = top5Grid().querySelector(`[data-id="${CSS.escape(movieId)}"]`);
   if (!card || card.classList.contains('eliminating')) return;
+
+  // Desplazar el foco a la siguiente tarjeta antes de eliminar
+  const remainingCards = [...top5Grid().querySelectorAll('.top5-card:not(.eliminating)')].filter(c => c !== card);
+  if (remainingCards.length > 0) {
+    remainingCards[0].focus();
+  }
 
   card.classList.add('eliminating');
   setTimeout(() => {

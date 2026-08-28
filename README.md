@@ -8,45 +8,51 @@
 
 ## 📌 ¿Qué es Letterboxd Match?
 
-**Letterboxd Match** es una aplicación web estática que compara las **Watchlists** y **Listas públicas** de hasta 5 usuarios de [Letterboxd](https://letterboxd.com) y encuentra al instante las películas que todos quieren ver.
+**Letterboxd Match** es una aplicación web 100% estática que compara las **Watchlists** y **Listas públicas** de hasta 5 usuarios de [Letterboxd](https://letterboxd.com) y encuentra al instante las películas que todos quieren ver.
 
-Ideal para cuando un grupo de amigos tiene que decidir qué ver juntos: en segundos ves qué coincide en las watchlists de todos, qué es exclusivo de cada uno, y si no se ponen de acuerdo, un modo de eliminación con confetti resuelve el empate.
+Ideal para cuando un grupo de amigos tiene que decidir qué ver juntos: en segundos ves qué coincide en las watchlists de todos, qué es exclusivo de cada uno, podés compartir el resultado con un enlace directo, exportarlo a CSV para tu colección, o resolver el empate con el modo interactivo **Top 5 Eliminator**.
+
+---
 
 ### ✨ Características principales
 
 | Feature | Detalle |
 |---|---|
-| 🔍 **Comparación instantánea** | Hasta 5 usuarios simultáneamente |
-| 📋 **Dos modos** | Watchlist personal o lista pública específica |
-| ⚡ **Validación en tiempo real** | Validación instantánea (debounce) con soporte de `@usuario`, username directo o URL completa |
-| 🕒 **Historial persistente** | Guarda las últimas comparaciones en `localStorage` (`lbmatch_v1_history`) con recarga en 1 clic |
-| 🔄 **Precarga y Limpieza** | Recuerda la última búsqueda al recargar la página y permite resetear inputs con el botón "Limpiar" |
-| 🎞️ **Paginación completa** | Extrae **todas** las páginas de cada lista, no solo las primeras 28 |
-| 🌐 **Sin API key** | Scraping HTML público vía proxy CORS propio |
-| 🖼️ **Pósters, sinopsis y rating reales** | Enriquecimiento on-demand vía `og:image` / `og:description` / `ratingValue`, disponible en el grid común, en únicas por usuario, en el modal de detalle y en el Top 5 |
-| 🎲 **Top 5 Eliminator** | Modo de decisión grupal con eliminación interactiva y confetti |
-| 📊 **Películas únicas** | Muestra lo exclusivo de cada usuario en pestañas |
-| 💾 **Caché inteligente** | Listas (30 min) y metadata de films (24 h) cacheadas en `localStorage` |
-| 💯 **100% estático** | Sin backend obligatorio, sin build step, desplegable en GitHub Pages |
+| 🔍 **Comparación instantánea** | Hasta 5 usuarios o listas públicas simultáneamente |
+| 📋 **Dos modos de origen** | Watchlist personal (`@usuario`, `usuario` o URL) o lista pública específica |
+| ⚡ **Validación en tiempo real** | Validación instantánea (debounce) con borde verde/rojo y mensajes contextuales claros |
+| 🔄 **Retry selectivo por usuario** | Si una lista falla o es privada, los usuarios exitosos se preservan y podés reintentar puntualmente en esa fila |
+| 🕒 **Historial persistente** | Guarda hasta 10 comparaciones en `localStorage` (`lbmatch_v1_history`) con recarga en 1 clic |
+| 🧹 **Precarga y Limpieza** | Recuerda la última búsqueda al abrir la web y permite resetear inputs con el botón "Limpiar" |
+| 🔗 **Compartir vía URL** | Parámetros automáticos (`?mode=watchlist&u=usuario1,usuario2`) y botón "Copiar link" con feedback visual |
+| 📥 **Exportar a CSV** | Descarga las películas en común en formato CSV con codificación UTF-8 BOM para compatibilidad total con Microsoft Excel |
+| 📡 **Indicador de salud de proxies** | Monitoreo en vivo durante la búsqueda y pill persistente en el footer con latencia y estado |
+| ♿ **Accesibilidad completa (a11y)** | Navegación completa por teclado (Tab, flechas, Supr/Espacio) en el Top 5 Eliminator y en las pestañas |
+| 🎞️ **Paginación automática** | Extrae **todas** las páginas de cada lista (hasta 30 páginas), no solo las primeras 28 |
+| 🖼️ **Pósters, sinopsis y ratings reales** | Enriquecimiento on-demand vía `og:image`, `og:description` y `ratingValue` |
+| 🎲 **Top 5 Eliminator** | Modo de decisión interactivo con eliminación de tarjetas, foco accesible y confetti |
+| 📊 **Películas únicas** | Pestañas con teclado para explorar lo exclusivo de cada usuario |
+| 💾 **Caché client-side** | Listas (30 min) y metadata de films (24 h) cacheadas localmente |
+| 💯 **100% estático** | HTML, CSS y Vanilla JS puro, sin build step, listo para GitHub Pages |
 
 ---
 
 ## 🛠️ Cómo funciona la extracción
 
-Letterboxd no ofrece una API pública sin aprobación previa, así que la app obtiene los datos scrapeando el HTML público de cada perfil:
+Letterboxd no ofrece una API pública sin aprobación previa, por lo que la app obtiene los datos scrapeando el HTML público de cada perfil mediante una cadena inteligente de proxies CORS:
 
 ```
-Usuario ingresa URL o username de Letterboxd
+Usuario ingresa URL o username de Letterboxd (o abre un link compartido ?mode=...&u=...)
         ↓
 App valida en tiempo real y expande username → URL canónica de watchlist
         ↓
 App construye URLs de paginación (/page/1/, /page/2/, …)
         ↓
-Solicitud enviada al proxy CORS (ver "Cadena de proxies" abajo)
+Solicitud enviada al proxy CORS (Worker propio / servidor local → AllOrigins fallback)
         ↓  [el proxy hace la petición a Letterboxd por nosotros, server-side]
-HTML de la página de lista/watchlist devuelto como texto
+HTML de la página devuelto como texto y analizado con DOMParser
         ↓
-DOMParser analiza el HTML y extrae los elementos LazyPoster:
+Extracción de elementos LazyPoster:
   <div data-component-class="LazyPoster"
        data-item-slug="princess-mononoke"
        data-item-name="Princess Mononoke (1997)"
@@ -56,27 +62,61 @@ Lista de objetos { id (slug), title, year, poster, link }
         ↓
 Algoritmo de intersección por slug → películas en común + únicas por usuario
         ↓
-Render de tarjetas con título y año + guardado en Historial
+Render de tarjetas, actualización de URL compartible, exportación CSV y guardado en Historial
 ```
 
 ---
 
-## 🎲 Top 5 Eliminator — Cómo usarlo
+## 🔗 Compartir comparaciones vía URL
 
-1. **Comparar listas**: ingresá las URLs o usernames de al menos 2 personas y hacé clic en "Comparar Listas".
-2. **Abrir el modo**: en la barra de estadísticas de resultados, hacé clic en **🎲 Top 5 Eliminator**.
-3. **Esperar el enrichment**: la app carga pósters, sinopsis y calificaciones de 5 películas al azar (instantáneo si ya estaban en caché, unos segundos si no).
-4. **Jugar**: pasá el mouse sobre cada póster para ver la sinopsis y las ★ estrellas, y hacé clic en la **×** para eliminar una película. Repetí hasta quedar con una sola.
-5. **Reiniciar**: "↺ Otras 5" genera un nuevo lote aleatorio.
+Podés compartir cualquier búsqueda o guardarla en tus marcadores simplemente pasando los parámetros en la URL:
 
-> Si hay menos de 5 películas en común, el modo usa todas las disponibles.
+```
+https://agusre.github.io/letterboxd-matchinglist/?mode=watchlist&u=agusre,edgarwright
+```
+
+- **Parámetros admitidos:**
+  - `mode`: `watchlist` o `list`.
+  - `u` o `users`: nombres de usuario o URLs separadas por coma.
+- **Botón "Copiar link":** En la cabecera de resultados comunes, hacé clic en **Copiar link** para copiar la URL lista para compartir con tus amigos. El botón confirmará con una animación y el texto `¡Copiado! ✓`.
 
 ---
 
-## 🕒 Historial y Última Búsqueda
+## 📥 Exportar resultados a CSV
 
-- **Historial:** Hacé clic en el botón `🕒 Historial` en la cabecera de la tarjeta para desplegar las últimas 10 comparaciones. Podés restaurar cualquier búsqueda con un clic o borrar entradas individuales/totales.
-- **Limpiar:** El botón `Limpiar` resetea el formulario a 2 filas vacías en cualquier momento.
+Para guardar o analizar las películas coincidentes:
+1. Realizá una comparación exitosa.
+2. En la sección de películas en común, hacé clic en **Exportar CSV**.
+3. Se descargará automáticamente un archivo con el formato:
+   ```
+   letterboxd_match_usuario1_usuario2_2026-08-28.csv
+   ```
+4. **Compatibilidad:** El archivo incluye **UTF-8 BOM (`\uFEFF`)**, lo que garantiza que caracteres con acentos, eñes y caracteres especiales se abran correctamente en **Microsoft Excel**, Google Sheets y Numbers.
+
+---
+
+## 🎲 Top 5 Eliminator
+
+Para esos momentos en los que el grupo no sabe qué elegir:
+
+1. **Comparar listas**: ingresá al menos 2 usuarios o listas y hacé clic en "Comparar Listas".
+2. **Abrir el modo**: en la barra de estadísticas de resultados, hacé clic en **🎲 Elegir qué ver hoy (Top 5)**.
+3. **Enriquecimiento de datos**: se seleccionan hasta 5 películas al azar y se obtienen sus pósters en alta resolución, sinopsis completa y calificación de estrellas.
+4. **Descartar películas**:
+   - Con mouse: hacé clic en la **×** de cada tarjeta.
+   - Con teclado: navegá con las flechas (**←** / **→**) y presioná **Supr**, **Retroceso** o **Espacio** para descartar.
+5. **Ganador**: al quedar 1 sola película, se activa el banner de ganador con confetti y un enlace directo a Letterboxd.
+
+---
+
+## ♿ Accesibilidad y Navegación por Teclado
+
+La interfaz está construida siguiendo las pautas de accesibilidad **WCAG AA**:
+- **Navegación general:** Atributos semánticos `aria-label`, `aria-describedby` y `aria-live` para lectores de pantalla.
+- **Top 5 Eliminator:** Las tarjetas reciben foco visible (`focus-visible`), se navegan con las teclas de dirección (**←**, **→**, **↑**, **↓**) y se descartan con **Supr**, **Retroceso** o **Espacio**.
+- **Pestañas de películas únicas:** Cambiá de usuario usando las flechas del teclado (**←** y **→**) con actualización instantánea de contenido.
+- **Cierre rápido:** La tecla `Escape` cierra instantáneamente modales, el panel de historial y el Top 5 Eliminator.
+- **Contraste de color:** Textos, botones de validación y badges diseñados con ratios de contraste superiores a 7:1 en tema dark.
 
 ---
 
@@ -100,48 +140,34 @@ node proxy-server.js
 > 
 > No requiere `npm install` ni librerías externas. Solo necesitás tener [Node.js](https://nodejs.org/) instalado.
 
-### Cache-busting al editar `app.js`
-
-GitHub Pages y los navegadores cachean `app.js` de forma agresiva. Si después de un `git push` los cambios no se reflejan, subí el número de versión en `index.html`:
-
-```html
-<script src="app.js?v=2"></script>
-```
-
-Esto fuerza a que se descargue la versión nueva en vez de servir una copia vieja en caché.
-
 ---
 
 ## ⚙️ Estructura del proyecto
 
 ```
 letterboxd-matchinglist/
-├── index.html       ← Estructura HTML semántica + SEO metadata + overlay Top 5
-├── style.css         ← Tema dark, variables CSS, grid responsivo, animaciones + modal + Top 5
-├── app.js            ← Fetch, proxy chain, parse, comparación, render, modal + Top 5 Eliminator + enrichMovieMeta
-├── proxy-server.js   ← Proxy CORS local para desarrollo (`node proxy-server.js`)
-└── README.md         ← Esta documentación
+├── index.html       ← Estructura HTML5 semántica + ARIA + botones de compartir/CSV + modal Top 5
+├── style.css         ← Tema dark, variables CSS, accesibilidad focus-visible, animaciones y canvas
+├── app.js            ← Lógica completa: validación, retry selectivo, proxies, historial, CSV, URL sharing, a11y
+├── proxy-server.js   ← Proxy CORS y servidor de desarrollo estático local (`node proxy-server.js`)
+└── README.md         ← Documentación del proyecto
 ```
 
 ---
 
-## 🧭 Cómo se llegó a esta arquitectura (aprendizajes)
+## 🧭 Pipeline de proxies CORS y resiliencia
 
-El diseño actual del pipeline de proxies no fue la primera versión — se llegó ahí iterando sobre fallos reales en producción:
-
-1. **v1 — proxies públicos en cadena secuencial.** Funcionaba, pero era lento (hasta 8 proxies probados uno por uno) y varios de la lista original (`corsproxy.org`, `cors.sh`, `thingproxy.freeboard.io`) dejaron de responder con headers CORS válidos, o el dominio directamente dejó de resolver.
-2. **v2 — todos los proxies en paralelo (`Promise.any`).** Resolvía más rápido, pero bajo carga (varios usuarios comparando listas + enrichment de decenas de films) terminaba saturando a los servicios gratuitos compartidos, generando rate-limits (`429`, `520`, `521`, `522`) que tumbaban comparaciones enteras.
-3. **v3 — proxy propio en Cloudflare Workers.** Al ser propio, sin compartir cuota con otros proyectos, resolvió la inestabilidad de fondo.
-4. **v4 (actual) — proxy propio primero, público como fallback real.** En vez de seguir "raceando" contra un proxy público que ya no hacía falta, se pasó a intentar el proxy propio solo, y recién si falla, recurrir al fallback. Resultado: consola limpia, menos requests desperdiciados, mismo nivel de resiliencia ante una caída puntual del proxy principal.
+1. **Proxy principal en desarrollo:** `http://localhost:3000/proxy?url=` (rápido y sin límites al correr `node proxy-server.js`).
+2. **Proxy principal en producción:** Cloudflare Worker dedicado (`https://letterboxd-proxy.agustin2-re.workers.dev/?url=`).
+3. **Fallback público:** `AllOrigins` en caso de indisponibilidad temporal del worker principal.
+4. **Monitoreo:** El estado del proxy y la latencia en milisegundos se reportan en tiempo real tanto en el banner de carga como en el footer de la aplicación.
 
 ---
 
 ## ⚠️ Limitaciones conocidas
 
-- **Listas privadas** no son accesibles — Letterboxd no expone contenido privado.
-- **Disponibilidad del proxy** — en producción se depende del Worker propio (muy estable, pero no 100% garantizado) más un fallback público de terceros. En desarrollo local, `node proxy-server.js` elimina esta dependencia por completo.
-- **Enriquecimiento (póster/sinopsis/rating)** — cada película sin esos datos en la lista original requiere un fetch adicional a su página individual, con concurrencia limitada (3 en simultáneo) para no saturar el proxy, y cacheado 24 h en `localStorage`. Si el proxy falla para una película puntual, esa tarjeta queda con "Sin póster" sin romper el resto de la UI.
-- **Rate limiting** — si el proxy propio cae y se recurre al público de fallback, ese sí puede devolver `429`/`5xx` bajo uso intenso. Esperar unos segundos y reintentar suele resolverlo.
+- **Listas privadas:** No son accesibles ya que Letterboxd requiere sesión para visualizarlas.
+- **Enriquecimiento de metadatos:** Para no saturar los proxies, los pósters y sinopsis se obtienen con concurrencia controlada (máximo 3 peticiones en paralelo) y se cachean localmente por 24 horas.
 
 ---
 
@@ -149,14 +175,15 @@ El diseño actual del pipeline de proxies no fue la primera versión — se lleg
 
 | Capa | Tecnología |
 |---|---|
-| Estructura | HTML5 semántico |
-| Estilos | CSS3 puro — Variables, Grid, Flexbox, Canvas, animaciones |
+| Estructura | HTML5 semántico + ARIA |
+| Estilos | CSS3 puro — Custom Properties, Flexbox, Grid, Glassmorphism, animaciones |
 | Lógica | Vanilla JavaScript (ES2020+) |
 | Fuente de datos | Scraping HTML público de Letterboxd |
-| Metadatos enriquecidos | Extracción `og:image` + `og:description` + `itemprop:ratingValue`, cacheados en `localStorage` |
-| CORS bypass | Proxy propio en Cloudflare Workers (producción) + `proxy-server.js`/Node (desarrollo local) + AllOrigins (fallback público) |
-| Confetti | Canvas 2D API (vanilla, sin librerías) |
-| Deploy | GitHub Pages (estático, sin build) |
+| Persistencia | `localStorage` (listas 30 min, metadata 24 h, historial permanente) |
+| CORS bypass | Cloudflare Worker propio + Node local + AllOrigins fallback |
+| Exportación | Blob API + UTF-8 BOM CSV |
+| Animaciones | Canvas 2D API para confetti |
+| Deploy | GitHub Pages (100% estático) |
 
 ---
 

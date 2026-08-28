@@ -669,6 +669,48 @@ main.container { padding-top: 48px; padding-bottom: 80px; }
 }
 .force-refresh-row small { opacity: .7; }
 
+.results-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-action-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+}
+.btn-action-sm:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+.btn-action-sm:active {
+  transform: translateY(0);
+}
+.btn-action-sm:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: 2px;
+}
+.btn-action-sm.is-copied {
+  background: var(--accent-green-dim);
+  border-color: rgba(0, 199, 116, 0.4);
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
 .btn-icon {
   width: 34px;
   height: 34px;
@@ -682,6 +724,10 @@ main.container { padding-top: 48px; padding-bottom: 80px; }
   transition: all var(--transition);
 }
 .btn-icon:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.btn-icon:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: 2px;
+}
 
 /* ── ERROR BANNER ── */
 .error-banner {
@@ -1461,15 +1507,27 @@ main.container { padding-top: 48px; padding-bottom: 80px; }
   font-family: inherit;
   padding: 0;
 }
-.top5-card:hover .top5-eliminate-btn {
+.top5-card:focus-visible {
+  outline: 2.5px solid var(--accent-green);
+  outline-offset: 3px;
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 0 24px rgba(0, 199, 116, 0.35);
+  border-color: var(--accent-green);
+}
+.top5-card:hover .top5-eliminate-btn,
+.top5-card:focus-visible .top5-eliminate-btn,
+.top5-card:focus-within .top5-eliminate-btn {
   opacity: 1;
   transform: scale(1);
 }
-.top5-eliminate-btn:hover {
+.top5-eliminate-btn:hover,
+.top5-eliminate-btn:focus-visible {
   background: #ef4444;
   border-color: #ef4444;
   transform: scale(1.15) !important;
   box-shadow: 0 0 12px rgba(239,68,68,.6);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 /* ── Card info footer ── */
