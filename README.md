@@ -1,14 +1,16 @@
-# 🎬 Letterboxd Match
+# 🎬 Letterboxd Matcher
 
 > **Descubrí qué películas tienen en común vos y tus amigos en Letterboxd** — sin registrarte, sin API key, sin backend propio que mantener.
 
 **[🌐 Ver demo en vivo →](https://agusre.github.io/letterboxd-matchinglist/)**
 
+![Letterboxd Matcher Open Graph Banner](og-image.png)
+
 ---
 
-## 📌 ¿Qué es Letterboxd Match?
+## 📌 ¿Qué es Letterboxd Matcher?
 
-**Letterboxd Match** es una aplicación web 100% estática que compara las **Watchlists** y **Listas públicas** de hasta 5 usuarios de [Letterboxd](https://letterboxd.com) y encuentra al instante las películas que todos quieren ver.
+**Letterboxd Matcher** es una aplicación web 100% estática que compara las **Watchlists** y **Listas públicas** de hasta 5 usuarios de [Letterboxd](https://letterboxd.com) y encuentra al instante las películas que todos quieren ver.
 
 Ideal para cuando un grupo de amigos tiene que decidir qué ver juntos: en segundos ves qué coincide en las watchlists de todos, qué es exclusivo de cada uno, podés compartir el resultado con un enlace directo, exportarlo a CSV para tu colección, o resolver el empate con el modo interactivo **Top 5 Eliminator**.
 
@@ -32,6 +34,7 @@ Ideal para cuando un grupo de amigos tiene que decidir qué ver juntos: en segun
 | 🖼️ **Pósters, sinopsis y ratings reales** | Enriquecimiento on-demand vía `og:image`, `og:description` y `ratingValue` |
 | 🎲 **Top 5 Eliminator** | Modo de decisión interactivo con eliminación de tarjetas, foco accesible y confetti |
 | 📊 **Películas únicas** | Pestañas con teclado para explorar lo exclusivo de cada usuario |
+| 🌐 **SEO Técnico y Schema.org** | Metadatos estáticos, JSON-LD (`WebApplication`, `WebSite`, `FAQPage`), Open Graph y `sitemap.xml` |
 | 💾 **Caché client-side** | Listas (30 min) y metadata de films (24 h) cacheadas localmente |
 | 💯 **100% estático** | HTML, CSS y Vanilla JS puro, sin build step, listo para GitHub Pages |
 
@@ -100,12 +103,38 @@ Para guardar o analizar las películas coincidentes:
 Para esos momentos en los que el grupo no sabe qué elegir:
 
 1. **Comparar listas**: ingresá al menos 2 usuarios o listas y hacé clic en "Comparar Listas".
-2. **Abrir el modo**: en la barra de estadísticas de resultados, hacé clic en **🎲 Elegir qué ver hoy (Top 5)**.
+2. **Abrir el modo**: en la barra de estadísticas de resultados, hacé clic en **🎲 Top 5 Eliminator**.
 3. **Enriquecimiento de datos**: se seleccionan hasta 5 películas al azar y se obtienen sus pósters en alta resolución, sinopsis completa y calificación de estrellas.
 4. **Descartar películas**:
    - Con mouse: hacé clic en la **×** de cada tarjeta.
    - Con teclado: navegá con las flechas (**←** / **→**) y presioná **Supr**, **Retroceso** o **Espacio** para descartar.
 5. **Ganador**: al quedar 1 sola película, se activa el banner de ganador con confetti y un enlace directo a Letterboxd.
+
+---
+
+## 🔍 SEO Técnico y Arquitectura Semántica
+
+La aplicación cuenta con una arquitectura de SEO técnico optimizada para el rastreo e indexación de Google y motores de búsqueda:
+
+1. **Metadatos estáticos completos (`index.html`):**
+   - Title tag estratégico (<60 caracteres).
+   - Meta descripción optimizada para CTR (<155 caracteres).
+   - Palabras clave bilingües (inglés y español).
+   - Etiquetas canónicas y directivas `robots` / `googlebot` con `max-snippet:-1` y `max-image-preview:large`.
+   - Etiquetas multilingües `hreflang` (`en`, `es`, `x-default`).
+2. **Datos estructurados Schema.org (`JSON-LD`):**
+   - `WebApplication`: categoría multimedia/entretenimiento, sistema operativo compatible, precio libre y lista de features.
+   - `WebSite`: definición canónica del sitio.
+   - `FAQPage`: acordeones de preguntas frecuentes con soporte de **Rich Snippets** en Google.
+3. **Archivos de rastreo en raíz:**
+   - `robots.txt`: acceso total para crawlers y referencia canónica al sitemap.
+   - `sitemap.xml`: mapa del sitio formal con fechas `lastmod` y anotaciones `xhtml:link hreflang`.
+   - `manifest.json`: manifiesto PWA con tema `#0d0f14` e iconos adaptativos.
+   - `og-image.png`: banner de previsualización para redes sociales (1200x630).
+4. **Semántica On-Page indexable:**
+   - Un único `<h1>` descriptivo con las palabras clave objetivo.
+   - Sección interactiva "Paso a paso / How It Works" y FAQ con `<details>` y `<summary>`.
+   - Texto semántico explicativo en el pie de página para indexación textual inmediata.
 
 ---
 
@@ -146,11 +175,16 @@ node proxy-server.js
 
 ```
 letterboxd-matchinglist/
-├── index.html       ← Estructura HTML5 semántica + ARIA + botones de compartir/CSV + modal Top 5
-├── style.css         ← Tema dark, variables CSS, accesibilidad focus-visible, animaciones y canvas
-├── app.js            ← Lógica completa: validación, retry selectivo, proxies, historial, CSV, URL sharing, a11y
-├── proxy-server.js   ← Proxy CORS y servidor de desarrollo estático local (`node proxy-server.js`)
-└── README.md         ← Documentación del proyecto
+├── index.html       ← Estructura HTML5 semántica + Metadatos SEO + JSON-LD + ARIA + Top 5 + FAQ
+├── style.css        ← Tema dark, variables CSS, accesibilidad, animaciones, FAQ y responsive
+├── app.js           ← Lógica completa: validación, retry selectivo, proxies, historial, CSV, URL sharing, a11y
+├── manifest.json    ← Manifiesto PWA para instalación móvil y de escritorio
+├── robots.txt       ← Directivas de rastreo para motores de búsqueda y sitemap
+├── sitemap.xml      ← Mapa del sitio XML con anotaciones hreflang y lastmod
+├── og-image.png     ← Banner Open Graph (1200x630) para previsualizaciones en redes sociales
+├── favicons/        ← Iconos y favicons multi-resolución (SVG, PNG, ICO, Webmanifest)
+├── proxy-server.js  ← Proxy CORS y servidor de desarrollo estático local (`node proxy-server.js`)
+└── README.md        ← Documentación completa del proyecto y guía de indexación
 ```
 
 ---
@@ -175,7 +209,7 @@ letterboxd-matchinglist/
 
 | Capa | Tecnología |
 |---|---|
-| Estructura | HTML5 semántico + ARIA |
+| Estructura | HTML5 semántico + ARIA + Schema.org JSON-LD |
 | Estilos | CSS3 puro — Custom Properties, Flexbox, Grid, Glassmorphism, animaciones |
 | Lógica | Vanilla JavaScript (ES2020+) |
 | Fuente de datos | Scraping HTML público de Letterboxd |
@@ -193,4 +227,4 @@ MIT — libre uso, modificación y distribución.
 
 ---
 
-*Hecho con ❤️ para cinéfilos · Los datos son públicos de [Letterboxd](https://letterboxd.com)*
+*Hecho con ❤️ para cinéfilos por [AgusRe](https://github.com/AgusRe) · Los datos son públicos de [Letterboxd](https://letterboxd.com)*

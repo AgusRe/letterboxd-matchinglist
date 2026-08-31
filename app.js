@@ -1910,6 +1910,7 @@ function renderResults(comparison, userLabels) {
       id="btn-open-top5"
       class="btn-top5-trigger"
       ${!hasCommon ? 'disabled' : ''}
+      aria-label="Abrir modo interactivo Top 5 Eliminator para decidir qué película ver"
       title="${hasCommon ? 'Modo eliminación: elegí la película de la noche' : 'Necesitás películas en común para usar el Top 5'}"
     >
       🎲 Top 5 Eliminator
@@ -1968,6 +1969,7 @@ function renderUniqueTabs(uniqueByUser, allUsers) {
     tab.dataset.tab = i;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-selected', isActive);
+    tab.setAttribute('aria-label', `Películas exclusivas de ${user} (${movies.length})`);
     tab.setAttribute('aria-controls', `panel-${i}`);
     tab.id = `tab-${i}`;
     tab.addEventListener('click', () => switchTab(i));
@@ -2071,7 +2073,7 @@ function createMovieCard(movie, index, isCommon) {
   card.setAttribute('aria-label', `${movie.title}${movie.year ? ` (${movie.year})` : ''}`);
 
   const posterHtml = movie.poster
-    ? `<img class="movie-poster" src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentNode.innerHTML=posterFallback()" />`
+    ? `<img class="movie-poster" src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="lazy" onerror="posterFallback(this)" />`
     : `<div class="movie-poster-placeholder">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="20" height="20" rx="3"/>

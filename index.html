@@ -231,7 +231,7 @@
               </div>
               <div id="history-list" class="history-list" role="list"></div>
               <div class="history-panel-footer">
-                <button id="btn-clear-history" class="btn-link-danger" type="button">Borrar todo el historial</button>
+                <button id="btn-clear-history" class="btn-link-danger" type="button" aria-label="Borrar todo el historial de comparaciones">Borrar todo el historial</button>
               </div>
             </div>
           </div>
@@ -274,7 +274,7 @@
       </button>
 
       <!-- Compare button -->
-      <button id="btn-compare" class="btn btn-primary">
+      <button id="btn-compare" class="btn btn-primary" aria-label="Comparar watchlists de Letterboxd">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.35-4.35" />
@@ -592,12 +592,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Semantic SEO Textual Guide for Search Crawlers -->
+    <div class="container footer-seo-guide">
+      <div class="footer-seo-box">
+        <h3 class="footer-seo-title">Letterboxd Matcher — Herramienta para comparar Watchlists y Listas de Cine</h3>
+        <p class="footer-seo-text">
+          <strong>Letterboxd Matcher</strong> es una aplicación web gratuita creada para ayudar a amigos, parejas y grupos cinéfilos a decidir qué película ver. Permite comparar las <em>watchlists</em> o listas temáticas públicas de 2 a 5 usuarios de Letterboxd simultáneamente. El algoritmo analiza los datos en tiempo real, cruza las películas pendientes y muestra al instante las coincidencias exactas. Incluye el modo interactivo <strong>Top 5 Eliminator</strong> para desempatar, exportación a archivo <strong>CSV</strong> compatible con Microsoft Excel y enlaces compartibles para WhatsApp y redes sociales.
+        </p>
+      </div>
+    </div>
   </footer>
 
   <!-- MOVIE DETAIL MODAL -->
   <div id="movie-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-card">
-      <button class="modal-close" id="modal-close-btn" aria-label="Cerrar">
+      <button class="modal-close" id="modal-close-btn" aria-label="Cerrar ventana de detalles de película">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M18 6 6 18M6 6l12 12" />
         </svg>
@@ -665,7 +675,7 @@
         </svg>
         Ver en Letterboxd
       </a>
-      <button id="btn-winner-restart" class="btn-top5-action" style="margin-top:12px;">
+      <button id="btn-winner-restart" class="btn-top5-action" style="margin-top:12px;" aria-label="Probar con otras 5 películas candidatas">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
           <path d="M21 3v5h-5"/>
