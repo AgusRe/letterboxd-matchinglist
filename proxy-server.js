@@ -147,9 +147,13 @@ const server = http.createServer((req, res) => {
   }
 
   // ── Static files ───────────────────────────────────────────────────────
-  let filePath = parsedUrl.pathname;
-  if (filePath === '/' || filePath === '') filePath = '/index.html';
-  filePath = path.join(STATIC_DIR, filePath);
+  let reqPath = parsedUrl.pathname;
+  let filePath = path.join(STATIC_DIR, reqPath);
+
+  // If path is directory or root, look for index.html
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(filePath, 'index.html');
+  }
 
   // Security: prevent path traversal
   if (!filePath.startsWith(STATIC_DIR)) {

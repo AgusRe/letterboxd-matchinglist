@@ -1,13 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+  <!-- Spanish Canonical Version (Root) -->
   <url>
     <loc>https://agusre.github.io/letterboxd-matchinglist/</loc>
     <lastmod>2026-08-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en" href="https://agusre.github.io/letterboxd-matchinglist/"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://agusre.github.io/letterboxd-matchinglist/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://agusre.github.io/letterboxd-matchinglist/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://agusre.github.io/letterboxd-matchinglist/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://agusre.github.io/letterboxd-matchinglist/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://agusre.github.io/letterboxd-matchinglist/en/" />
+    <image:image>
+      <image:loc>https://agusre.github.io/letterboxd-matchinglist/og-image.png</image:loc>
+      <image:title>Letterboxd Matcher - Comparar Watchlists con Amigos</image:title>
+      <image:caption>Herramienta gratuita para encontrar películas en común en Letterboxd</image:caption>
+    </image:image>
   </url>
+
+  <!-- English Version (/en/) -->
+  <url>
+    <loc>https://agusre.github.io/letterboxd-matchinglist/en/</loc>
+    <lastmod>2026-08-31</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://agusre.github.io/letterboxd-matchinglist/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://agusre.github.io/letterboxd-matchinglist/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://agusre.github.io/letterboxd-matchinglist/en/" />
+    <image:image>
+      <image:loc>https://agusre.github.io/letterboxd-matchinglist/og-image.png</image:loc>
+      <image:title>Letterboxd Matcher - Compare Watchlists with Friends</image:title>
+      <image:caption>Free web tool to find movies in common on Letterboxd</image:caption>
+    </image:image>
+  </url>
+
 </urlset>

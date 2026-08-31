@@ -5,6 +5,17 @@
 
 'use strict';
 
+// ─── I18N HELPER ─────────────────────────────────────────────────────────────
+const t = (key, params = {}) => (window.I18N ? window.I18N.t(key, params) : key);
+
+function syncLangToggle() {
+  const toggle = document.getElementById('lang-toggle');
+  if (!toggle) return;
+  const search = window.location.search;
+  const baseHref = toggle.getAttribute('href').split('?')[0];
+  toggle.setAttribute('href', baseHref + search);
+}
+
 // ─── CONSTANTS ─────────────────────────────────────────────────────────────
 
 /**
@@ -167,14 +178,13 @@ function debounce(fn, wait = 350) {
 function formatRelativeTime(ts) {
   const now = Date.now();
   const diffSec = Math.floor((now - ts) / 1000);
-  if (diffSec < 60) return 'Hace instantes';
+  if (diffSec < 60) return t('hist.time_just_now');
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `Hace ${diffMin} min`;
+  if (diffMin < 60) return t('hist.time_minutes', { n: diffMin });
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `Hace ${diffHours} h`;
+  if (diffHours < 24) return t('hist.time_hours', { n: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays === 1) return 'Ayer';
-  if (diffDays < 7) return `Hace ${diffDays} d`;
+  if (diffDays < 7) return t('hist.time_days', { n: diffDays });
   const d = new Date(ts);
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
 }
@@ -290,14 +300,14 @@ function validateInputValue(rawVal, mode) {
       return {
         valid: false,
         empty: false,
-        message: 'En modo lista, ingresá la URL completa de una lista pública (ej: letterboxd.com/usuario/list/nombre/)'
+        message: t('val.invalid_url')
       };
     }
     if (val.includes('letterboxd.com') && !val.includes('/list/')) {
       return {
         valid: false,
         empty: false,
-        message: 'Esta no parece una lista específica. Usá el formato: letterboxd.com/usuario/list/nombre/'
+        message: t('val.invalid_url')
       };
     }
     if (isValidLetterboxdListUrl(val)) {
@@ -306,7 +316,7 @@ function validateInputValue(rawVal, mode) {
     return {
       valid: false,
       empty: false,
-      message: 'Ingresá una URL válida de lista pública de Letterboxd'
+      message: t('val.invalid_url')
     };
   }
 
@@ -320,7 +330,7 @@ function validateInputValue(rawVal, mode) {
     return {
       valid: false,
       empty: false,
-      message: 'Nombre de usuario inválido. Usá solo letras, números, puntos o guiones.'
+      message: t('val.invalid_user')
     };
   }
 
@@ -330,22 +340,22 @@ function validateInputValue(rawVal, mode) {
     const u = new URL(full);
     const host = u.hostname.replace(/^www\./, '');
     if (host !== 'letterboxd.com') {
-      return { valid: false, empty: false, message: 'La URL debe pertenecer a letterboxd.com' };
+      return { valid: false, empty: false, message: t('val.invalid_url') };
     }
     if (u.pathname.includes('/list/')) {
       return {
         valid: false,
         empty: false,
-        message: 'Esta es una lista específica. Cambiá al modo "Lista Específica" arriba.'
+        message: t('val.invalid_url')
       };
     }
     const parts = u.pathname.split('/').filter(Boolean);
     if (parts.length === 0) {
-      return { valid: false, empty: false, message: 'Falta el nombre de usuario en la URL' };
+      return { valid: false, empty: false, message: t('val.invalid_user') };
     }
     return { valid: true, empty: false, message: '' };
   } catch {
-    return { valid: false, empty: false, message: 'Ingresá un usuario o URL válida de Letterboxd' };
+    return { valid: false, empty: false, message: t('val.invalid_url') };
   }
 }
 
@@ -445,8 +455,7 @@ function renderHistoryUI() {
     historyList.innerHTML = `
       <div class="history-empty">
         <span class="history-empty-icon" aria-hidden="true">📂</span>
-        <p>No hay comparaciones guardadas todavía.</p>
-        <small>Las búsquedas exitosas aparecerán acá automáticamente.</small>
+        <p>${t('hist.empty')}</p>
       </div>
     `;
     if (btnClearHistory) btnClearHistory.style.display = 'none';
@@ -459,16 +468,14 @@ function renderHistoryUI() {
 
   historyList.innerHTML = items.map(item => {
     const isWatchlist = item.mode === 'watchlist';
-    const modeLabel = isWatchlist ? 'Watchlist' : 'Lista';
+    const modeLabel = isWatchlist ? 'Watchlist' : 'List';
     const modeBadgeClass = isWatchlist ? 'badge-mode-watchlist' : 'badge-mode-list';
     const timeStr = formatRelativeTime(item.timestamp);
     const usersStr = item.labels.map(l => `<span class="history-user-chip">${escapeHtml(l)}</span>`).join('');
-    const commonStr = item.commonCount > 0
-      ? `<span class="history-match-chip">${item.commonCount} en común</span>`
-      : `<span class="history-match-chip is-zero">0 en común</span>`;
+    const commonStr = `<span class="history-match-chip ${item.commonCount === 0 ? 'is-zero' : ''}">${t('hist.badge_common', { count: item.commonCount })}</span>`;
 
     return `
-      <div class="history-item" data-id="${escapeAttr(item.id)}" role="listitem" tabindex="0">
+      <div class="history-item" data-id="${escapeAttr(item.id)}" role="listitem" tabindex="0" aria-label="${escapeAttr(t('hist.load_aria', { users: item.labels.join(', ') }))}">
         <div class="history-item-content">
           <div class="history-item-meta">
             <span class="history-mode-badge ${modeBadgeClass}">${modeLabel}</span>
@@ -479,7 +486,7 @@ function renderHistoryUI() {
             ${usersStr}
           </div>
         </div>
-        <button class="btn-remove-history" data-id="${escapeAttr(item.id)}" type="button" aria-label="Eliminar comparación del historial">
+        <button class="btn-remove-history" data-id="${escapeAttr(item.id)}" type="button" aria-label="${escapeAttr(t('hist.remove_aria'))}">
           ✕
         </button>
       </div>
@@ -581,6 +588,7 @@ function updateUrlParams(mode, rawInputs) {
     url.searchParams.set('mode', mode);
     url.searchParams.set('u', rawInputs.filter(Boolean).join(','));
     window.history.replaceState({ mode, inputs: rawInputs }, '', url.toString());
+    syncLangToggle();
   } catch (e) {
     console.warn('[URL] Could not update params:', e);
   }
@@ -591,6 +599,7 @@ function parseUrlParamsOnLoad() {
     const url = new URL(window.location.href);
     const mode = url.searchParams.get('mode');
     const uParam = url.searchParams.get('u') || url.searchParams.get('users');
+    syncLangToggle();
     if (!uParam) return false;
 
     const userList = uParam.split(',').map(s => s.trim()).filter(Boolean);
@@ -654,20 +663,20 @@ async function handleCopyShareLink() {
     }
 
     shareBtn.classList.add('is-copied');
-    if (shareText) shareText.textContent = '¡Copiado! ✓';
+    if (shareText) shareText.textContent = t('results.btn_copied');
     setTimeout(() => {
       shareBtn.classList.remove('is-copied');
-      if (shareText) shareText.textContent = 'Copiar link';
+      if (shareText) shareText.textContent = t('results.btn_copy_link');
     }, 2200);
   } catch (err) {
     console.error('[Share] Copy failed:', err);
-    alert(`Link de comparación:\n${url}`);
+    alert(`Link:\n${url}`);
   }
 }
 
 function exportCommonMoviesToCsv() {
   if (!state.lastResults || !state.lastResults.common || state.lastResults.common.length === 0) {
-    showError('No hay películas en común para exportar.');
+    showError(t('results.no_common_title'));
     return;
   }
 
@@ -675,7 +684,12 @@ function exportCommonMoviesToCsv() {
   const userLabels = state.lastResults.userLabels || [];
   const usersStr = userLabels.join(', ');
 
-  const headers = ['Título', 'Año', 'En común con', 'Enlace Letterboxd'];
+  const headers = [
+    t('csv.col_title'),
+    t('csv.col_year'),
+    t('csv.col_found_in'),
+    t('csv.col_letterboxd_url')
+  ];
 
   const escapeCsvCell = (val) => {
     if (val === null || val === undefined) return '""';
@@ -766,13 +780,13 @@ function reportProxyStatus({ user = '', name = '', host = '', status = 'attempt'
   if (liveBanner && liveText) {
     if (status === 'attempt') {
       liveBanner.classList.remove('hidden');
-      liveText.textContent = user ? `${user}: conectando vía ${label}…` : `Conectando vía ${label}…`;
+      liveText.textContent = user ? t('proxy.connecting_user', { user, label }) : t('proxy.connecting_general', { label });
     } else if (status === 'fallback') {
       liveBanner.classList.remove('hidden');
-      liveText.textContent = user ? `⚠️ ${user}: ${label} no respondió, probando alternativa…` : `⚠️ ${label} no respondió, probando fallback…`;
+      liveText.textContent = user ? `⚠️ ${user}: ${label}…` : `⚠️ ${label}…`;
     } else if (status === 'success') {
       liveBanner.classList.remove('hidden');
-      liveText.textContent = user ? `✅ ${user}: datos recibidos vía ${label} (${elapsed}ms)` : `✅ Conectado vía ${label} (${elapsed}ms)`;
+      liveText.textContent = user ? t('proxy.connected_user', { user, label, elapsed }) : t('proxy.connected_general', { label, elapsed });
     }
   }
 
@@ -788,9 +802,9 @@ function updateFooterProxyHealth(proxyName, elapsed) {
   if (!dot || !label) return;
 
   dot.className = 'proxy-health-dot dot-green';
-  label.textContent = `Proxy activo: ${proxyName}${elapsed ? ` (${elapsed}ms)` : ''}`;
+  label.textContent = `${t('proxy.active_label', { name: proxyName })}${elapsed ? ` (${elapsed}ms)` : ''}`;
   if (pill) {
-    pill.title = `Último proxy exitoso: ${proxyName} · Latencia: ${elapsed}ms`;
+    pill.title = `${proxyName} · ${elapsed}ms`;
   }
 }
 
@@ -801,7 +815,7 @@ function initProxyHealthUI() {
 
   const defaultProxy = PROXIES[0]?.name || 'Cloudflare Worker';
   dot.className = 'proxy-health-dot dot-green';
-  label.textContent = `Proxy: ${defaultProxy}`;
+  label.textContent = t('proxy.label_ready');
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
@@ -833,11 +847,11 @@ function addUserRow(index) {
 
   const isListMode = state.sourceMode === 'list';
   const placeholder = isListMode
-    ? `https://letterboxd.com/usuario/list/nombre-lista/`
-    : `https://letterboxd.com/usuario/watchlist/ o usuario`;
+    ? t('val.user_placeholder_list')
+    : t('val.user_placeholder_watchlist');
 
   row.innerHTML = `
-    <label for="user-input-${index}" class="visually-hidden">Usuario ${index}</label>
+    <label for="user-input-${index}" class="visually-hidden">${t('val.user_aria_input', { index })}</label>
     <span class="user-index" aria-hidden="true">${index}</span>
     <div class="user-input-wrap">
       <div class="input-field-inner">
@@ -849,7 +863,7 @@ function addUserRow(index) {
           autocomplete="off"
           spellcheck="false"
           data-valid="false"
-          aria-label="${isListMode ? 'URL de lista pública' : 'Usuario o URL de watchlist'} para persona ${index}"
+          aria-label="${t('val.user_aria_input', { index })}"
           aria-describedby="feedback-user-${index}"
         />
         <span class="input-validation-icon" aria-hidden="true"></span>
@@ -857,18 +871,18 @@ function addUserRow(index) {
       <div class="input-feedback-msg hidden" id="feedback-user-${index}" role="alert"></div>
       <div class="row-status-bar hidden" id="status-bar-${index}">
         <span class="row-status-text" id="status-text-${index}"></span>
-        <button type="button" class="btn-retry-user hidden" id="btn-retry-${index}" data-row="${index}" aria-label="Reintentar usuario ${index}">
+        <button type="button" class="btn-retry-user hidden" id="btn-retry-${index}" data-row="${index}" aria-label="${t('val.btn_retry')} ${index}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
             <path d="M21 3v5h-5"/>
             <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
             <path d="M3 21v-5h5"/>
           </svg>
-          Reintentar
+          ${t('val.btn_retry')}
         </button>
       </div>
     </div>
-    <button class="btn-remove" data-row="${index}" aria-label="Eliminar usuario ${index}" ${index <= MIN_USERS ? 'disabled' : ''}>
+    <button class="btn-remove" data-row="${index}" aria-label="${t('val.btn_remove', { index })}" ${index <= MIN_USERS ? 'disabled' : ''}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
         <path d="M18 6 6 18M6 6l12 12"/>
       </svg>
@@ -1157,11 +1171,11 @@ async function handleCompare() {
 
   // Iniciar estado de carga por fila
   inputData.forEach(item => {
-    setRowStatus(item.rowIndex, 'loading', `Cargando "${item.label}"…`, false);
+    setRowStatus(item.rowIndex, 'loading', t('val.loading_user', { label: item.label }), false);
   });
 
   try {
-    updateLoadingMessage(`Obteniendo datos de ${inputData.length} lista(s)…`);
+    updateLoadingMessage(t('loading.fetching_lists', { count: inputData.length }));
 
     // If forceRefresh is set, evict cached entries before fetching
     if (state.forceRefresh) {
@@ -1193,9 +1207,9 @@ async function handleCompare() {
       if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
         successful.push({ label: item.label, url: item.pageUrl, movies: result.value, rowIndex: item.rowIndex });
         state.userResults[item.pageUrl] = { label: item.label, url: item.pageUrl, movies: result.value };
-        setRowStatus(item.rowIndex, 'success', `✅ ${result.value.length} películas cargadas`, false);
+        setRowStatus(item.rowIndex, 'success', t('val.success', { count: result.value.length }), false);
       } else {
-        const reason = result.reason?.message || (result.value && result.value.length === 0 ? 'La lista está vacía o es privada' : 'Error al obtener datos');
+        const reason = result.reason?.message || (result.value && result.value.length === 0 ? t('val.error_empty') : t('val.error_fetch'));
         failed.push({ label: item.label, url: item.pageUrl, rowIndex: item.rowIndex, error: reason });
         failReasons.push(`${item.label}: ${reason}`);
         setRowStatus(item.rowIndex, 'error', `❌ ${reason}`, true);
@@ -1204,7 +1218,7 @@ async function handleCompare() {
     });
 
     if (successful.length >= MIN_USERS) {
-      updateLoadingMessage('Calculando coincidencias…');
+      updateLoadingMessage(t('loading.computing'));
       await sleep(250);
 
       const comparison = computeComparison(successful);
@@ -1267,7 +1281,7 @@ async function handleRetryUser(rowIndex) {
   letterboxdCache.invalidate(pageUrl);
   console.log(`[Cache] 🔄 Invalidadas entradas para retry de "${label}" (${pageUrl})`);
 
-  setRowStatus(rowIndex, 'loading', `Reintentando "${label}"…`, false);
+  setRowStatus(rowIndex, 'loading', t('val.retrying_user', { label }), false);
 
   const fetchId = Date.now();
   state.activeFetches[rowIndex] = fetchId;
@@ -1279,11 +1293,11 @@ async function handleRetryUser(rowIndex) {
     if (state.activeFetches[rowIndex] !== fetchId) return;
 
     if (!movies || movies.length === 0) {
-      throw new Error('No se encontraron películas. Verificá que la lista sea pública.');
+      throw new Error(t('val.error_empty'));
     }
 
     // Éxito en la fila
-    setRowStatus(rowIndex, 'success', `✅ ${movies.length} películas cargadas`, false);
+    setRowStatus(rowIndex, 'success', t('val.success', { count: movies.length }), false);
     state.userResults[pageUrl] = { label, url: pageUrl, movies };
 
     // Buscar todos los usuarios actualmente en inputs que tengan datos exitosos en memoria
@@ -1415,8 +1429,8 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
   const cached = letterboxdCache.get(baseUrl);
   if (cached) {
     console.log(`[Cache] ⚡ Hit for "${label}" (${cached.length} films)`);
-    updateLoadingMessage(`⚡ "${label}" cargado desde caché (${cached.length} películas)`);
-    reportProxyStatus({ user: label, status: 'success', name: 'Caché local', elapsed: 0 });
+    updateLoadingMessage(`⚡ ${label} (${cached.length})`);
+    reportProxyStatus({ user: label, status: 'success', name: t('proxy.local_cache'), elapsed: 0 });
     await sleep(150);
     return cached;
   }
@@ -1894,26 +1908,26 @@ function renderResults(comparison, userLabels) {
   statsBar.innerHTML = `
     <div class="stat-chip">
       <span class="dot dot-green"></span>
-      <strong>${common.length}</strong> en común
+      <strong>${common.length}</strong> ${t('hist.badge_common', { count: common.length })}
     </div>
     <div class="stat-chip">
       <span class="dot dot-blue"></span>
-      <strong>${totalMovies}</strong> películas totales
+      ${t('results.total_movies', { count: totalMovies })}
     </div>
     ${allUsers.map(u => `
       <div class="stat-chip">
         <span class="dot dot-orange"></span>
-        <strong>${uniqueByUser[u]?.length ?? 0}</strong> únicas de <strong>${u}</strong>
+        ${t('results.unique_user', { count: uniqueByUser[u]?.length ?? 0, user: escapeHtml(u) })}
       </div>
     `).join('')}
     <button
       id="btn-open-top5"
       class="btn-top5-trigger"
       ${!hasCommon ? 'disabled' : ''}
-      aria-label="Abrir modo interactivo Top 5 Eliminator para decidir qué película ver"
-      title="${hasCommon ? 'Modo eliminación: elegí la película de la noche' : 'Necesitás películas en común para usar el Top 5'}"
+      aria-label="${t('results.top5_aria')}"
+      title="${hasCommon ? t('results.top5_title_enabled') : t('results.top5_title_disabled')}"
     >
-      🎲 Top 5 Eliminator
+      ${t('results.top5_btn')}
     </button>
   `;
 
@@ -1969,7 +1983,7 @@ function renderUniqueTabs(uniqueByUser, allUsers) {
     tab.dataset.tab = i;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-selected', isActive);
-    tab.setAttribute('aria-label', `Películas exclusivas de ${user} (${movies.length})`);
+    tab.setAttribute('aria-label', t('results.tab_aria', { user, count: movies.length }));
     tab.setAttribute('aria-controls', `panel-${i}`);
     tab.id = `tab-${i}`;
     tab.addEventListener('click', () => switchTab(i));
@@ -2057,7 +2071,7 @@ function posterFallback(imgEl) {
       <rect x="2" y="2" width="20" height="20" rx="3"/>
       <path d="M8 10l8 0M8 14l4 0"/>
     </svg>
-    <span>Sin póster</span>`;
+    <span>${t('results.no_poster')}</span>`;
   imgEl.parentNode.insertBefore(placeholder, imgEl.nextSibling);
 }
 
@@ -2073,20 +2087,20 @@ function createMovieCard(movie, index, isCommon) {
   card.setAttribute('aria-label', `${movie.title}${movie.year ? ` (${movie.year})` : ''}`);
 
   const posterHtml = movie.poster
-    ? `<img class="movie-poster" src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="lazy" onerror="posterFallback(this)" />`
+    ? `<img class="movie-poster" src="${escapeAttr(movie.poster)}" alt="${escapeAttr(t('results.poster_alt', { title: movie.title }))}" loading="lazy" onerror="posterFallback(this)" />`
     : `<div class="movie-poster-placeholder">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="20" height="20" rx="3"/>
           <path d="M8 10l8 0M8 14l4 0"/>
         </svg>
-        <span>Sin póster</span>
+        <span>${t('results.no_poster')}</span>
        </div>`;
 
   card.innerHTML = `
     <div class="movie-poster-wrap">
       ${posterHtml}
       <div class="movie-hover-overlay">
-        <span class="overlay-btn">Ver detalles →</span>
+        <span class="overlay-btn">${t('results.view_details')}</span>
       </div>
     </div>
     <div class="movie-info">
@@ -2131,18 +2145,18 @@ function renderModalContent(movie, isCommon, loading) {
   modalContent.dataset.movieId = movie.id;
 
   const posterHtml = movie.poster
-    ? `<img src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="posterFallback(this)" />`
+    ? `<img src="${escapeAttr(movie.poster)}" alt="${escapeAttr(t('results.poster_alt', { title: movie.title }))}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="posterFallback(this)" />`
     : (loading
         ? `<div class="modal-poster-loading"><span class="spinner"></span></div>`
-        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem;">Sin póster</div>`);
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem;">${t('results.no_poster')}</div>`);
 
   const ratingHtml = movie.rating != null
     ? `<div class="modal-rating">${ratingToStars(movie.rating)} <span class="modal-rating-num">${movie.rating.toFixed(1)}</span></div>`
-    : (loading ? `<div class="modal-rating modal-rating-loading">Cargando calificación…</div>` : '');
+    : (loading ? `<div class="modal-rating modal-rating-loading">${t('modal.loading_rating')}</div>` : '');
 
   const descHtml = movie.description
     ? `<p class="modal-desc">${escapeHtml(movie.description.slice(0, 320))}${movie.description.length > 320 ? '…' : ''}</p>`
-    : (loading ? `<p class="modal-desc modal-desc-loading">Cargando sinopsis…</p>` : '');
+    : (loading ? `<p class="modal-desc modal-desc-loading">${t('modal.loading_desc')}</p>` : '');
 
   modalContent.innerHTML = `
     <div class="modal-movie-inner">
@@ -2154,11 +2168,11 @@ function renderModalContent(movie, isCommon, loading) {
         ${descHtml}
         <a class="modal-link" href="${escapeAttr(movie.link)}" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Ver en Letterboxd
+          ${t('modal.view_letterboxd')}
         </a>
         ${isCommon && movie.foundIn ? `
           <div class="modal-users-found">
-            <strong>Está en la lista de:</strong> ${movie.foundIn.map(u => escapeHtml(u)).join(', ')}
+            <strong>${t('modal.found_in')}</strong> ${movie.foundIn.map(u => escapeHtml(u)).join(', ')}
           </div>
         ` : ''}
       </div>
@@ -2428,16 +2442,16 @@ function renderTop5Cards(movies) {
     card.dataset.id = movie.id;
     card.setAttribute('role', 'article');
     card.setAttribute('tabindex', '0');
-    card.setAttribute('aria-label', `${movie.title}${movie.year ? ` (${movie.year})` : ''}. Presioná Supr, Retroceso o Espacio para eliminar.`);
+    card.setAttribute('aria-label', t('top5.card_aria', { title: movie.title, year: movie.year ? ` (${movie.year})` : '' }));
 
     // Poster
     const posterHtml = movie.poster
-      ? `<img class="top5-poster-img" src="${escapeAttr(movie.poster)}" alt="Póster de ${escapeHtml(movie.title)}" loading="eager" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('afterbegin','<div class=top5-poster-placeholder><svg width=36 height=36 viewBox=\'0 0 24 24\' fill=none stroke=currentColor stroke-width=1.5><rect x=2 y=2 width=20 height=20 rx=3/><path d=\'M8 10l8 0M8 14l4 0\'/></svg><span>Sin póster</span></div>')" />`
+      ? `<img class="top5-poster-img" src="${escapeAttr(movie.poster)}" alt="${escapeAttr(t('results.poster_alt', { title: movie.title }))}" loading="eager" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('afterbegin','<div class=top5-poster-placeholder><svg width=36 height=36 viewBox=\\'0 0 24 24\\' fill=none stroke=currentColor stroke-width=1.5><rect x=2 y=2 width=20 height=20 rx=3/><path d=\\'M8 10l8 0M8 14l4 0\\'/></svg><span>${escapeHtml(t('results.no_poster'))}</span></div>')" />`
       : `<div class="top5-poster-placeholder">
            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
              <rect x="2" y="2" width="20" height="20" rx="3"/><path d="M8 10l8 0M8 14l4 0"/>
            </svg>
-           <span>Sin póster</span>
+           <span>${t('results.no_poster')}</span>
          </div>`;
 
     // Stars & synopsis
@@ -2445,11 +2459,11 @@ function renderTop5Cards(movies) {
     const starsHtml = stars
       ? `<div class="top5-stars">${escapeHtml(stars)}</div>
          <div class="top5-rating-label">${movie.rating?.toFixed(1)} / 5</div>`
-      : `<div class="top5-rating-label" style="font-size:.7rem;">Sin calificación</div>`;
+      : `<div class="top5-rating-label" style="font-size:.7rem;">${t('top5.no_rating')}</div>`;
 
     const synopsis = movie.description
       ? `<div class="top5-synopsis">${escapeHtml(movie.description.slice(0, 260))}</div>`
-      : `<div class="top5-synopsis" style="color:var(--text-muted);font-style:italic;">Sinopsis no disponible</div>`;
+      : `<div class="top5-synopsis" style="color:var(--text-muted);font-style:italic;">${t('top5.no_synopsis')}</div>`;
 
     card.innerHTML = `
       <div class="top5-poster-wrap">
@@ -2463,7 +2477,7 @@ function renderTop5Cards(movies) {
         <div class="top5-card-title">${escapeHtml(movie.title)}</div>
         ${movie.year ? `<div class="top5-card-year">${movie.year}</div>` : ''}
       </div>
-      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="Eliminar ${escapeHtml(movie.title)}" tabindex="0">×</button>
+      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="${escapeAttr(t('top5.btn_eliminate_aria', { title: movie.title }))}" tabindex="0">×</button>
     `;
 
     // Soporte accesible de teclado por tarjeta
@@ -2551,7 +2565,7 @@ function showTop5Winner() {
   banner.classList.remove('hidden');
 
   // Counter message
-  top5Counter().innerHTML = '🏆 ¡Tenemos ganadora!';
+  top5Counter().innerHTML = `🏆 ${t('top5.winner_heading')}`;
 
   // Confetti!
   launchConfetti();
@@ -2565,7 +2579,7 @@ function updateTop5Counter() {
   const counter = top5Counter();
   if (el) el.textContent = top5State.remaining;
   if (counter && !counter.textContent.includes('🏆')) {
-    counter.innerHTML = `<span>${top5State.remaining}</span> película(s) restante(s)`;
+    counter.innerHTML = t('top5.remaining', { count: top5State.remaining });
   }
 }
 

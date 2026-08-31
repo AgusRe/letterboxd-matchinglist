@@ -149,6 +149,33 @@ La interfaz está construida siguiendo las pautas de accesibilidad **WCAG AA**:
 
 ---
 
+## 🌐 Arquitectura Bilingüe e Internacionalización (i18n)
+
+La plataforma cuenta con soporte bilingüe nativo (Español e Inglés) 100% estático diseñado para maximizar el SEO global y la experiencia de usuario:
+
+- **Versión en Español (Canónica de raíz):** `https://agusre.github.io/letterboxd-matchinglist/`
+  - Idioma: `<html lang="es">`
+  - Open Graph: `og:locale="es_ES"`, `og:locale:alternate="en_US"`, `og:locale:alternate="es_AR"`
+  - JSON-LD Schema: `WebApplication`, `WebSite` y `FAQPage` completamente traducidos al español.
+- **Versión en Inglés (Subdirectorio `/en/`):** `https://agusre.github.io/letterboxd-matchinglist/en/`
+  - Idioma: `<html lang="en">`
+  - Open Graph: `og:locale="en_US"`, `og:locale:alternate="es_ES"`
+  - JSON-LD Schema: `WebApplication`, `WebSite` y `FAQPage` redactados en inglés nativo.
+- **Anotaciones Hreflang y x-default:**
+  - Ambas versiones declaran enlaces recíprocos `<link rel="alternate" hreflang="es" ... />` y `<link rel="alternate" hreflang="en" ... />`.
+  - Se designa `hreflang="x-default"` apuntando a la versión en inglés (`/en/`) para usuarios y buscadores de regiones no hispanohablantes.
+- **Selector de idioma inteligente:**
+  - El botón toggle (`EN` / `ES` en el navbar) preserva automáticamente los query parameters de búsqueda actuales (ej: si estás en `/?mode=watchlist&u=agusre,edgarwright`, al pulsar `EN` viajarás a `/en/?mode=watchlist&u=agusre,edgarwright`).
+- **Lógica única y modular (`i18n.js` + `app.js`):**
+  - **Cero duplicación de lógica:** `app.js` contiene una única fuente de verdad para el scraping, la validación y el desempate Top 5, consumiendo los textos mediante el helper `I18N.t(key, params)`.
+
+### ➕ ¿Cómo agregar un nuevo idioma (ej: Portugués `/pt/`)?
+1. En `i18n.js`, agregá el bloque de traducciones correspondiente (`TRANSLATIONS.pt = { ... }`).
+2. Creá el directorio `pt/` con su propio `pt/index.html`, ajustando los enlaces relativos (`../style.css`, `../app.js`, `../i18n.js`) y las anotaciones hreflang.
+3. Agregá la URL en `sitemap.xml` con sus enlaces `xhtml:link` recíprocos.
+
+---
+
 ## 🚀 Cómo ejecutar la página localmente
 
 Para ejecutar el proyecto en tu máquina local:
@@ -160,11 +187,12 @@ node proxy-server.js
 ```
 
 2. Abrí tu navegador en:
-**[http://localhost:3000](http://localhost:3000)**
+- **Español:** [http://localhost:3000](http://localhost:3000)
+- **English:** [http://localhost:3000/en/](http://localhost:3000/en/)
 
 > 💡 **¿Por qué con `node proxy-server.js`?**  
 > `proxy-server.js` es un servidor Node ligero y sin dependencias que realiza dos tareas a la vez:
-> 1. Sirve los archivos estáticos (`index.html`, `style.css`, `app.js`, imágenes/favicons).
+> 1. Sirve los archivos estáticos (`index.html`, `en/index.html`, `style.css`, `app.js`, `i18n.js`, imágenes/favicons).
 > 2. Provee el endpoint `/proxy?url=...` para consultar Letterboxd localmente sin restricciones de CORS.
 > 
 > No requiere `npm install` ni librerías externas. Solo necesitás tener [Node.js](https://nodejs.org/) instalado.
@@ -175,12 +203,15 @@ node proxy-server.js
 
 ```
 letterboxd-matchinglist/
-├── index.html       ← Estructura HTML5 semántica + Metadatos SEO + JSON-LD + ARIA + Top 5 + FAQ
+├── index.html       ← Versión en Español (raíz canónica) + Schema JSON-LD (ES) + FAQ
+├── en/
+│   └── index.html   ← Versión en Inglés (/en/) + Schema JSON-LD (EN) + FAQ
+├── i18n.js          ← Diccionario de traducciones (ES / EN) y helper I18N.t()
+├── app.js           ← Lógica compartida única: scraping, proxies, validación, Top 5, CSV, historial
 ├── style.css        ← Tema dark, variables CSS, accesibilidad, animaciones, FAQ y responsive
-├── app.js           ← Lógica completa: validación, retry selectivo, proxies, historial, CSV, URL sharing, a11y
 ├── manifest.json    ← Manifiesto PWA para instalación móvil y de escritorio
-├── robots.txt       ← Directivas de rastreo para motores de búsqueda y sitemap
-├── sitemap.xml      ← Mapa del sitio XML con anotaciones hreflang y lastmod
+├── robots.txt       ← Directivas de rastreo para motores de búsqueda y referencia al sitemap
+├── sitemap.xml      ← Mapa del sitio XML con 2 URLs (/ y /en/) y anotaciones hreflang
 ├── og-image.png     ← Banner Open Graph (1200x630) para previsualizaciones en redes sociales
 ├── favicons/        ← Iconos y favicons multi-resolución (SVG, PNG, ICO, Webmanifest)
 ├── proxy-server.js  ← Proxy CORS y servidor de desarrollo estático local (`node proxy-server.js`)
@@ -209,9 +240,9 @@ letterboxd-matchinglist/
 
 | Capa | Tecnología |
 |---|---|
-| Estructura | HTML5 semántico + ARIA + Schema.org JSON-LD |
+| Estructura | HTML5 semántico + ARIA + Schema.org JSON-LD (ES & EN) |
 | Estilos | CSS3 puro — Custom Properties, Flexbox, Grid, Glassmorphism, animaciones |
-| Lógica | Vanilla JavaScript (ES2020+) |
+| Lógica | Vanilla JavaScript (ES2020+) + i18n modular sin bundler |
 | Fuente de datos | Scraping HTML público de Letterboxd |
 | Persistencia | `localStorage` (listas 30 min, metadata 24 h, historial permanente) |
 | CORS bypass | Cloudflare Worker propio + Node local + AllOrigins fallback |
@@ -228,3 +259,4 @@ MIT — libre uso, modificación y distribución.
 ---
 
 *Hecho con ❤️ para cinéfilos por [AgusRe](https://github.com/AgusRe) · Los datos son públicos de [Letterboxd](https://letterboxd.com)*
+
