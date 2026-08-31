@@ -1,61 +1,178 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Letterboxd Match — Compará Watchlists con Amigos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>Letterboxd Matcher | Compare Watchlists &amp; Find Movies in Common</title>
   <meta name="description"
-    content="Compará las watchlists y listas públicas de hasta 5 usuarios de Letterboxd y encontrá al instante qué películas quieren ver todos. Sin registro, sin API key." />
-  <meta name="robots" content="index, follow" />
+    content="Compare Letterboxd watchlists with friends. Find movies in common, eliminate options with Top 5, and decide what to watch tonight easily." />
+  <meta name="keywords"
+    content="letterboxd compare, letterboxd watch with friends, letterboxd watchlist in common, peliculas en comun letterboxd, comparar listas letterboxd, movie picker friends, compare letterboxd watchlists, letterboxd match, letterboxd matcher, what to watch letterboxd" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="author" content="AgusRe" />
+  <meta name="theme-color" content="#0d0f14" />
+  <meta name="color-scheme" content="dark" />
+
+  <!-- Canonical & Multilingual Alternate Links -->
   <link rel="canonical" href="https://agusre.github.io/letterboxd-matchinglist/" />
+  <link rel="alternate" hreflang="x-default" href="https://agusre.github.io/letterboxd-matchinglist/" />
+  <link rel="alternate" hreflang="en" href="https://agusre.github.io/letterboxd-matchinglist/" />
+  <link rel="alternate" hreflang="es" href="https://agusre.github.io/letterboxd-matchinglist/" />
 
-  <!-- Open Graph (WhatsApp, Facebook, Discord, Slack, etc.) -->
-  <meta property="og:title" content="Letterboxd Match — Compará Watchlists con Amigos" />
-  <meta property="og:description" content="Descubrí qué películas tienen en común vos y tus amigos en Letterboxd, al instante." />
+  <!-- Open Graph / Facebook / WhatsApp / Discord / Slack -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Letterboxd Matcher" />
   <meta property="og:url" content="https://agusre.github.io/letterboxd-matchinglist/" />
+  <meta property="og:title" content="Letterboxd Matcher | Compare Watchlists &amp; Find Movies in Common" />
+  <meta property="og:description"
+    content="Compare Letterboxd watchlists with friends. Find movies in common, eliminate options with Top 5, and decide what to watch tonight easily." />
   <meta property="og:image" content="https://agusre.github.io/letterboxd-matchinglist/og-image.png" />
-  <meta property="og:locale" content="es_AR" />
+  <meta property="og:image:secure_url" content="https://agusre.github.io/letterboxd-matchinglist/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Letterboxd Matcher - Compare Watchlists &amp; Find Movies in Common" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="es_ES" />
+  <meta property="og:locale:alternate" content="es_AR" />
 
-  <!-- Twitter/X Card -->
+  <!-- Twitter / X Cards -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Letterboxd Match — Compará Watchlists con Amigos" />
-  <meta name="twitter:description" content="Descubrí qué películas tienen en común vos y tus amigos en Letterboxd, al instante." />
+  <meta name="twitter:title" content="Letterboxd Matcher | Compare Watchlists &amp; Find Movies in Common" />
+  <meta name="twitter:description"
+    content="Compare Letterboxd watchlists with friends. Find movies in common, eliminate options with Top 5, and decide what to watch tonight easily." />
   <meta name="twitter:image" content="https://agusre.github.io/letterboxd-matchinglist/og-image.png" />
+  <meta name="twitter:image:alt" content="Letterboxd Matcher - Compare Watchlists &amp; Find Movies in Common" />
+  <meta name="twitter:creator" content="@AgusRe" />
 
-  <!-- Favicon -->
+  <!-- Favicons & App Icons -->
   <link rel="icon" type="image/svg+xml" href="favicons/favicon.svg" />
   <link rel="icon" type="image/x-icon" href="favicons/favicon.ico" sizes="any" />
-  <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="96x96" href="favicons/favicon-96x96.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon.png" />
-  <link rel="manifest" href="favicons/site.webmanifest" />
+  <link rel="manifest" href="manifest.json" />
 
-  <!-- Datos estructurados para Google (rich results) -->
+  <!-- Structured Data / Rich Results (Schema.org) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Letterboxd Match",
-    "url": "https://agusre.github.io/letterboxd-matchinglist/",
-    "description": "Compará las watchlists y listas públicas de múltiples usuarios de Letterboxd para encontrar películas en común al instante.",
-    "applicationCategory": "Entertainment",
-    "operatingSystem": "Any (Web Browser)",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    }
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://agusre.github.io/letterboxd-matchinglist/#webapp",
+        "name": "Letterboxd Matcher",
+        "alternateName": [
+          "Letterboxd Matching List",
+          "Letterboxd Match",
+          "Letterboxd Watchlist Compare"
+        ],
+        "url": "https://agusre.github.io/letterboxd-matchinglist/",
+        "description": "Compare Letterboxd watchlists and public lists with friends. Find movies in common, eliminate choices with Top 5, and decide what to watch tonight easily.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "All",
+        "inLanguage": ["en", "es"],
+        "browserRequirements": "Requires JavaScript. Requires HTML5.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "AgusRe",
+          "url": "https://github.com/AgusRe"
+        },
+        "screenshot": "https://agusre.github.io/letterboxd-matchinglist/og-image.png",
+        "featureList": [
+          "Compare up to 5 Letterboxd watchlists simultaneously",
+          "Compare custom public Letterboxd lists",
+          "Top 5 Eliminator movie decision mode with confetti",
+          "Export matching films to UTF-8 BOM CSV",
+          "Share direct comparisons via URL parameters",
+          "Persistent local comparison history",
+          "Live CORS proxy health monitoring"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://agusre.github.io/letterboxd-matchinglist/#website",
+        "url": "https://agusre.github.io/letterboxd-matchinglist/",
+        "name": "Letterboxd Matcher",
+        "description": "Free web tool to compare Letterboxd watchlists and discover movies in common between friends.",
+        "inLanguage": ["en", "es"],
+        "publisher": {
+          "@type": "Person",
+          "name": "AgusRe",
+          "url": "https://github.com/AgusRe"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://agusre.github.io/letterboxd-matchinglist/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I compare Letterboxd watchlists with friends?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Simply enter 2 to 5 Letterboxd usernames or profile URLs into Letterboxd Matcher and click 'Compare Lists'. The tool automatically scans public watchlists and displays all common movies instantly."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Cómo comparar listas de Letterboxd con amigos?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Ingresá de 2 a 5 nombres de usuario o URLs de Letterboxd en la herramienta y presioná 'Comparar Listas'. La aplicación analizará las listas públicas y mostrará instantáneamente las películas que todos tienen en común."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need a Letterboxd account, API key, or Pro subscription?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No! Letterboxd Matcher is 100% free and requires no login, registration, API key, or Letterboxd Pro subscription. You only need the public usernames or list URLs of your friends."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I compare custom public lists or only watchlists?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "You can compare both standard watchlists and custom public lists created on Letterboxd. Simply switch the selector from 'Watchlist' to 'Specific List' and paste the custom list URLs."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does the Top 5 Eliminator mode work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Top 5 Eliminator picks 5 movies at random from your common matches. Your group takes turns eliminating movies one by one until a single winning movie is chosen for movie night."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I export common movies to CSV or share the results?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! You can click 'Export CSV' to download a clean spreadsheet with UTF-8 BOM encoding for Microsoft Excel, or click 'Copy Link' to generate a shareable URL containing your comparison query."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
 
+  <!-- Typography & Preconnect -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=1" />
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 
 <body>
@@ -64,10 +181,20 @@
   <header class="site-header">
     <div class="container">
       <div class="logo">
-        <span class="logo-icon">🎬</span>
-        <span class="logo-text">Letterboxd<strong>Match</strong></span>
+        <span class="logo-icon" aria-hidden="true">🎬</span>
+        <span class="logo-text">Letterboxd<strong>Matcher</strong></span>
       </div>
-      <p class="tagline">Descubrí qué van a ver juntos esta noche</p>
+      <p class="tagline">Descubrí qué películas tienen en común vos y tus amigos · Find movies in common</p>
+      <div class="header-nav">
+        <a href="#how-it-works" class="header-nav-link">Cómo funciona</a>
+        <a href="#faq" class="header-nav-link">FAQ</a>
+        <a href="https://github.com/AgusRe/letterboxd-matchinglist" target="_blank" rel="noopener noreferrer" class="header-nav-link header-nav-github" aria-label="Repositorio en GitHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
     </div>
   </header>
 
@@ -78,8 +205,8 @@
     <section class="card input-card" aria-labelledby="form-title">
       <div class="card-header-row">
         <div class="card-header-text">
-          <h1 id="form-title" class="card-title">Comparar listas de Letterboxd</h1>
-          <p class="card-subtitle">Ingresá los usuarios o URLs de Letterboxd de cada persona (de 2 a 5). Las listas deben ser públicas.</p>
+          <h1 id="form-title" class="card-title">Letterboxd Matcher — Comparar Watchlists con Amigos</h1>
+          <p class="card-subtitle">Ingresá los usuarios o URLs de Letterboxd de cada persona (de 2 a 5). Encontrá qué películas coinciden en las watchlists de todos para decidir qué ver hoy.</p>
         </div>
         <div class="card-header-actions">
           <button id="btn-clear-inputs" class="btn-action-ghost" type="button" title="Limpiar todos los campos" aria-label="Limpiar todos los campos">
@@ -116,7 +243,7 @@
         <label class="source-option">
           <input type="radio" name="source" value="watchlist" id="src-watchlist" checked />
           <span class="source-pill">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path d="M9 12l2 2 4-4" />
               <rect x="3" y="3" width="18" height="18" rx="3" />
             </svg>
@@ -126,7 +253,7 @@
         <label class="source-option">
           <input type="radio" name="source" value="list" id="src-list" />
           <span class="source-pill">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path d="M4 6h16M4 12h16M4 18h10" />
             </svg>
             Lista Específica
@@ -139,7 +266,7 @@
 
       <!-- Add user button -->
       <button id="btn-add-user" class="btn btn-ghost" aria-label="Agregar usuario">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 8v8M8 12h8" />
         </svg>
@@ -148,7 +275,7 @@
 
       <!-- Compare button -->
       <button id="btn-compare" class="btn btn-primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.35-4.35" />
         </svg>
@@ -159,7 +286,7 @@
       <label class="force-refresh-row" for="chk-force-refresh" title="Ignorar datos guardados y descargar todo de nuevo">
         <input type="checkbox" id="chk-force-refresh" />
         <span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
             <path d="M21 3v5h-5"/>
           </svg>
@@ -250,16 +377,219 @@
 
     </section>
 
+    <!-- ─── SEMANTIC ON-PAGE SEO CONTENT & HOW-TO GUIDE ─── -->
+    <section class="seo-section" id="how-it-works" aria-labelledby="how-it-works-title">
+      <div class="seo-section-header">
+        <span class="seo-pill-tag">Guía Rápida · Step-by-Step</span>
+        <h2 id="how-it-works-title" class="seo-section-title">¿Cómo comparar Watchlists de Letterboxd con amigos?</h2>
+        <p class="seo-section-desc">Encontrá qué ver en común en 4 simples pasos, sin necesidad de crear cuenta ni instalar extensiones.</p>
+      </div>
+
+      <div class="seo-grid">
+        <article class="seo-card">
+          <div class="seo-card-step" aria-hidden="true">01</div>
+          <div class="seo-card-icon">👥</div>
+          <h3 class="seo-card-title">Ingresá los usuarios o listas</h3>
+          <p class="seo-card-text">
+            Escribí el <strong>nombre de usuario de Letterboxd</strong> (ej: <code>agusre</code> o <code>@edgarwright</code>) o pegá el enlace a una <strong>lista pública</strong>. Podés comparar de 2 a 5 personas simultáneamente.
+          </p>
+        </article>
+
+        <article class="seo-card">
+          <div class="seo-card-step" aria-hidden="true">02</div>
+          <div class="seo-card-icon">⚡</div>
+          <h3 class="seo-card-title">Escaneo automático y coincidencia</h3>
+          <p class="seo-card-text">
+            La herramienta recorre de forma inteligente la paginación completa de cada watchlist y calcula la <strong>intersección exacta</strong> para mostrar al instante las películas que todos quieren ver.
+          </p>
+        </article>
+
+        <article class="seo-card">
+          <div class="seo-card-step" aria-hidden="true">03</div>
+          <div class="seo-card-icon">🎲</div>
+          <h3 class="seo-card-title">Top 5 Eliminator (Desempate)</h3>
+          <p class="seo-card-text">
+            ¿Muchas opciones y no se ponen de acuerdo? Activá el <strong>Top 5 Eliminator</strong>: eliminen títulos por turnos hasta quedarse con la <strong>película ganadora</strong> para su noche de cine.
+          </p>
+        </article>
+
+        <article class="seo-card">
+          <div class="seo-card-step" aria-hidden="true">04</div>
+          <div class="seo-card-icon">🔗</div>
+          <h3 class="seo-card-title">Compartí y exportá a CSV</h3>
+          <p class="seo-card-text">
+            Copiá el enlace generado con los parámetros de la búsqueda para enviárselo a tu grupo de WhatsApp o Discord, o <strong>descargá un archivo CSV</strong> compatible con Microsoft Excel y Google Sheets.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ─── WHY LETTERBOXD MATCHER / KEY FEATURES ─── -->
+    <section class="seo-section" aria-labelledby="features-title">
+      <div class="seo-section-header">
+        <span class="seo-pill-tag">Ventajas · Features</span>
+        <h2 id="features-title" class="seo-section-title">La mejor herramienta para elegir qué ver con amigos en Letterboxd</h2>
+        <p class="seo-section-desc">Diseñada específicamente para cinéfilos, clubes de cine y grupos de amigos que usan Letterboxd.</p>
+      </div>
+
+      <div class="seo-features-grid">
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="feature-title">100% Gratis, Privado y Sin Registro</h3>
+            <p class="feature-desc">No requiere iniciar sesión con tu cuenta de Letterboxd ni API key. Tus búsquedas se procesan en el navegador sin guardar datos privados.</p>
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="feature-title">Pósters, Ratings y Sinopsis Reales</h3>
+            <p class="feature-desc">Visualizá carátulas en alta definición, año de estreno, calificaciones promedio y sinopsis para cada película encontrada.</p>
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="feature-title">Hasta 5 Usuarios en Simultáneo</h3>
+            <p class="feature-desc">Compará watchlists de grupos grandes de hasta 5 personas y descubrí también qué películas son exclusivas de cada uno.</p>
+          </div>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="feature-title">Historial Local y Caché Rápida</h3>
+            <p class="feature-desc">Guarda tus comparaciones frecuentes en <code>localStorage</code> y optimiza el tiempo de carga con un sistema de caché de 30 minutos.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── FAQ SECTION (ACCORDION & STRUCTURED DATA) ─── -->
+    <section class="seo-section seo-faq-section" id="faq" aria-labelledby="faq-title">
+      <div class="seo-section-header">
+        <span class="seo-pill-tag">FAQ · Preguntas Frecuentes</span>
+        <h2 id="faq-title" class="seo-section-title">Preguntas Frecuentes sobre Letterboxd Matcher</h2>
+        <p class="seo-section-desc">Respuestas directas a las dudas más comunes sobre la comparación de watchlists y selección de películas.</p>
+      </div>
+
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>¿Cómo comparar las watchlists de dos o más amigos en Letterboxd?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              Escribí los nombres de usuario de Letterboxd de tus amigos en los campos superiores y presioná el botón <strong>Comparar Listas</strong>. Letterboxd Matcher consultará las watchlists públicas mediante proxies CORS seguros y mostrará un listado con todas las películas que coinciden en sus listas.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>¿Se necesita Letterboxd Pro o iniciar sesión para usar la herramienta?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              <strong>No, no es necesario.</strong> Letterboxd Matcher es 100% gratuita y funciona de forma pública. No necesitás suscripción Pro ni registrarte. Lo único requerido es que los perfiles y listas que quieras comparar estén configurados como públicos en Letterboxd.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>¿Puedo comparar listas públicas personalizadas además de la Watchlist?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              ¡Sí! Simplemente seleccioná la opción <strong>"Lista Específica"</strong> en el selector de fuente y pegá la URL completa de la lista de Letterboxd (por ejemplo: <code>https://letterboxd.com/usuario/list/nombre-de-lista/</code>). Podés comparar listas temáticas creadas por vos o por cualquier usuario de la comunidad.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>¿Qué es y cómo funciona el Top 5 Eliminator?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              El <strong>Top 5 Eliminator</strong> es un modo interactivo para resolver la indecisión grupal. La app selecciona al azar 5 películas de las que tienen en común, y los miembros del grupo van eliminando una por una haciendo clic en la tarjeta correspondiente. Cuando queda una sola película, se corona como la ganadora de la noche con una animación especial de confetti.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>¿Cómo exportar las películas en común a Excel o CSV?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              Una vez realizada la comparación, hacé clic en el botón <strong>Exportar CSV</strong> en la cabecera de resultados. Se descargará un archivo CSV codificado en <strong>UTF-8 BOM</strong>, lo que garantiza una visualización perfecta de acentos y caracteres especiales en Microsoft Excel, Google Sheets y Apple Numbers.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>How do I compare Letterboxd watchlists with friends in English?</span>
+            <span class="faq-chevron" aria-hidden="true">▼</span>
+          </summary>
+          <div class="faq-answer">
+            <p>
+              Simply enter 2 to 5 Letterboxd usernames or profile URLs into the input fields and click <strong>Compare Lists</strong>. The tool will parse each public watchlist, match identical movies using their Letterboxd slugs, and display all overlapping films ready for your movie night!
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
   </main>
 
   <!-- ─── FOOTER ─── -->
   <footer class="site-footer">
     <div class="container footer-content">
-      <p>Hecho con <span aria-label="amor">❤️</span> para cinéfilos · Los datos son públicos vía RSS de <a
-          href="https://letterboxd.com" target="_blank" rel="noopener noreferrer">Letterboxd</a></p>
-      <div id="proxy-health-indicator" class="proxy-health-indicator" title="Estado de conectividad y proxies CORS">
-        <span class="proxy-health-dot dot-green" id="proxy-health-dot"></span>
-        <span id="proxy-health-label">Conexión: Lista</span>
+      <div class="footer-col-left">
+        <p class="footer-credits">
+          Hecho con <span aria-label="amor">❤️</span> para cinéfilos por <a href="https://github.com/AgusRe" target="_blank" rel="noopener noreferrer"><strong>AgusRe</strong></a> · Datos públicos vía RSS / Scrape de <a
+            href="https://letterboxd.com" target="_blank" rel="noopener noreferrer">Letterboxd</a>.
+        </p>
+        <p class="footer-disclaimer">
+          Letterboxd Matcher es un proyecto de código abierto independiente y no está afiliado, respaldado ni asociado oficialmente con Letterboxd Limited.
+        </p>
+      </div>
+      <div class="footer-col-right">
+        <div id="proxy-health-indicator" class="proxy-health-indicator" title="Estado de conectividad y proxies CORS">
+          <span class="proxy-health-dot dot-green" id="proxy-health-dot"></span>
+          <span id="proxy-health-label">Conexión: Lista</span>
+        </div>
       </div>
     </div>
   </footer>
