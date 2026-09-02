@@ -101,12 +101,32 @@ const TRANSLATIONS = {
     "top5.card_aria": "{title}{year}. Presioná Supr, Retroceso o Espacio para eliminar.",
     "top5.no_rating": "Sin calificación",
     "top5.no_synopsis": "Sinopsis no disponible",
+    "top5.setup_title": "¿Filtrar películas por Streaming para el Top 5?",
+    "top5.setup_desc": "Elegí si querés jugar el Top 5 con todas las películas en común o solo con las disponibles en plataformas específicas.",
+    "top5.setup_all_opt": "🎲 Todas las películas ({count})",
+    "top5.setup_all_desc": "Sin restricción de streaming",
+    "top5.setup_stream_opt": "📺 Solo con plataformas seleccionadas ({count})",
+    "top5.setup_stream_desc": "Elegí las plataformas que tienen disponibles hoy",
+    "top5.setup_btn_start": "Comenzar Eliminator →",
+    "top5.setup_no_matches": "No hay películas para la combinación de plataformas seleccionada.",
 
     // ── CSV Export ──
     "csv.col_title": "Título",
     "csv.col_year": "Año",
     "csv.col_letterboxd_url": "URL Letterboxd",
-    "csv.col_found_in": "Presente en la lista de"
+    "csv.col_found_in": "Presente en la lista de",
+
+    // ── Streaming & TMDB ──
+    "stream.filter_label": "Filtrar por streaming:",
+    "stream.all_platforms": "Todas",
+    "stream.loading_providers": "Buscando plataformas en {region}… ({current}/{total})",
+    "stream.providers_ready": "Streaming en {region} listo",
+    "stream.not_available": "No disponible en streaming en {region}",
+    "stream.available_on": "Disponible en streaming ({region}):",
+    "stream.no_matches_filter": "No hay películas que coincidan con las plataformas seleccionadas.",
+    "stream.tmdb_disabled": "Filtro de streaming desactivado (configurá tu TMDB API Key en config.js)",
+    "stream.tmdb_error": "No se pudo conectar con TMDB para consultar streaming.",
+    "stream.badge_stream": "Streaming"
   },
 
   en: {
@@ -204,12 +224,32 @@ const TRANSLATIONS = {
     "top5.card_aria": "{title}{year}. Press Delete, Backspace or Space to eliminate.",
     "top5.no_rating": "No rating",
     "top5.no_synopsis": "Synopsis not available",
+    "top5.setup_title": "Filter Top 5 by Streaming Platforms?",
+    "top5.setup_desc": "Choose whether to play Top 5 with all common movies or only those available on specific platforms.",
+    "top5.setup_all_opt": "🎲 All common movies ({count})",
+    "top5.setup_all_desc": "No streaming platform restriction",
+    "top5.setup_stream_opt": "📺 Selected streaming platforms only ({count})",
+    "top5.setup_stream_desc": "Pick from available subscription platforms",
+    "top5.setup_btn_start": "Start Eliminator →",
+    "top5.setup_no_matches": "No movies match the selected streaming platforms.",
 
     // ── CSV Export ──
     "csv.col_title": "Title",
     "csv.col_year": "Year",
     "csv.col_letterboxd_url": "Letterboxd URL",
-    "csv.col_found_in": "Found in list of"
+    "csv.col_found_in": "Found in list of",
+
+    // ── Streaming & TMDB ──
+    "stream.filter_label": "Filter by streaming:",
+    "stream.all_platforms": "All",
+    "stream.loading_providers": "Checking streaming availability in {region}… ({current}/{total})",
+    "stream.providers_ready": "Streaming in {region} ready",
+    "stream.not_available": "Not available to stream in {region}",
+    "stream.available_on": "Available on streaming ({region}):",
+    "stream.no_matches_filter": "No common movies match the selected streaming platforms.",
+    "stream.tmdb_disabled": "Streaming filter disabled (configure your TMDB API Key in config.js)",
+    "stream.tmdb_error": "Could not connect to TMDB to fetch streaming providers.",
+    "stream.badge_stream": "Streaming"
   }
 };
 

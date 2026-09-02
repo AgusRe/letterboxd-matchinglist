@@ -201,6 +201,8 @@ const state = {
   currentSearchId: 0,      // token de generación para búsquedas (evita AbortController)
   activeFetches: {},       // token activo por fila: { [rowIndex]: fetchId }
   lastSuccessfulProxy: null,
+  selectedProviders: new Set(), // Set de provider_id seleccionados para filtrar
+  commonProvidersMap: {},       // { [movieId]: { tmdbId, providers: [{ provider_id, provider_name, logo_path }] } }
 };
 
 /** State for the Top 5 Eliminator mode */
@@ -236,9 +238,16 @@ const proxyHealthDot = $('#proxy-health-dot');
 const proxyHealthLabel = $('#proxy-health-label');
 const resultsSection = $('#results-section');
 const statsBar = $('#stats-bar');
+const streamingFilterBar = $('#streaming-filter-bar');
+const streamingFilterLabel = $('#streaming-filter-label');
+const streamingProgress = $('#streaming-progress');
+const streamingProgressText = $('#streaming-progress-text');
+const streamingChipsContainer = $('#streaming-chips');
 const commonGrid = $('#common-grid');
 const commonCount = $('#common-count');
 const commonEmpty = $('#common-empty');
+const commonEmptyTitle = $('#common-empty-title');
+const commonEmptyDesc = $('#common-empty-desc');
 const uniqueTabs = $('#unique-tabs');
 const uniquePanels = $('#unique-panels');
 const movieModal = $('#movie-modal');
@@ -251,6 +260,17 @@ const shareBtnText = $('#share-btn-text');
 
 // ── Top 5 Eliminator DOM refs (resolved lazily so they exist after HTML parse) ──
 const top5Overlay = () => $('#top5-overlay');
+const top5Setup = () => $('#top5-setup');
+const top5SetupTitle = () => $('#top5-setup-title');
+const top5SetupDesc = () => $('#top5-setup-desc');
+const top5OptAllLabel = () => $('#top5-opt-all-label');
+const top5OptAllSub = () => $('#top5-opt-all-sub');
+const top5OptStreamWrap = () => $('#top5-opt-stream-wrap');
+const top5OptStreamLabel = () => $('#top5-opt-stream-label');
+const top5OptStreamSub = () => $('#top5-opt-stream-sub');
+const top5SetupChips = () => $('#top5-setup-chips');
+const top5ChipsContainer = () => $('#top5-chips-container');
+const btnTop5Start = () => $('#btn-top5-start');
 const top5Grid = () => $('#top5-grid');
 const top5Loading = () => $('#top5-loading');
 const top5LoadingMsg = () => $('#top5-loading-msg');
@@ -1965,6 +1985,9 @@ function renderCommonMovies(movies) {
   });
 
   enrichGridPosters(sorted, commonGrid);
+
+  // Trigger TMDB Watch Providers resolution for common movies
+  loadStreamingProvidersForCommonMovies(sorted, state.currentSearchId);
 }
 
 function renderUniqueTabs(uniqueByUser, allUsers) {
@@ -2158,6 +2181,42 @@ function renderModalContent(movie, isCommon, loading) {
     ? `<p class="modal-desc">${escapeHtml(movie.description.slice(0, 320))}${movie.description.length > 320 ? '…' : ''}</p>`
     : (loading ? `<p class="modal-desc modal-desc-loading">${t('modal.loading_desc')}</p>` : '');
 
+  // Providers section in modal
+  const movieData = state.commonProvidersMap[movie.id];
+  const providers = movieData?.providers || [];
+  const region = tmdbConfig.region;
+  let providersHtml = '';
+
+  if (tmdbConfig.apiKey) {
+    if (providers.length > 0) {
+      providersHtml = `
+        <div class="modal-providers-section">
+          <div class="modal-providers-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="15" rx="2" ry="2"/>
+              <polyline points="17 2 12 7 7 2"/>
+            </svg>
+            <span>${t('stream.available_on', { region })}</span>
+          </div>
+          <div class="modal-providers-list">
+            ${providers.map(p => `
+              <div class="modal-provider-pill">
+                ${p.logo_path ? `<img class="modal-provider-logo" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" />` : ''}
+                <span>${escapeHtml(p.provider_name)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (movieData && providers.length === 0) {
+      providersHtml = `
+        <div class="modal-providers-section">
+          <span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>
+        </div>
+      `;
+    }
+  }
+
   modalContent.innerHTML = `
     <div class="modal-movie-inner">
       <div class="modal-poster">${posterHtml}</div>
@@ -2166,6 +2225,7 @@ function renderModalContent(movie, isCommon, loading) {
         ${movie.year ? `<div class="modal-year">${movie.year}</div>` : ''}
         ${ratingHtml}
         ${descHtml}
+        ${providersHtml}
         <a class="modal-link" href="${escapeAttr(movie.link)}" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           ${t('modal.view_letterboxd')}
@@ -2189,17 +2249,162 @@ function closeModal() {
 // ─── TOP 5 ELIMINATOR ────────────────────────────────────────────────────────
 
 /**
- * Opens the Top 5 overlay and starts a new round with the common movies pool.
+ * Opens the Top 5 overlay and shows setup if streaming providers exist, or goes directly to init.
  */
 function openTop5() {
   if (!state.lastResults) return;
   const pool = state.lastResults.common || [];
   if (pool.length === 0) return;
 
-  top5State.pool = pool;
   top5Overlay().classList.remove('hidden');
   document.body.style.overflow = 'hidden';
-  initTop5(pool);
+
+  // Check if we have TMDB providers available to offer filtering
+  const hasProvidersData = Object.keys(state.commonProvidersMap || {}).length > 0;
+  const availableProviders = getAvailableCommonProvidersList();
+
+  if (hasProvidersData && availableProviders.length > 0) {
+    showTop5Setup(pool, availableProviders);
+  } else {
+    // No streaming key or no providers loaded yet: proceed directly with all common movies
+    top5Setup()?.classList.add('hidden');
+    initTop5(pool);
+  }
+}
+
+/**
+ * Extracts unique provider objects available in the current common results
+ */
+function getAvailableCommonProvidersList() {
+  const map = new Map();
+  const common = state.lastResults?.common || [];
+  common.forEach(m => {
+    const data = state.commonProvidersMap[m.id];
+    (data?.providers || []).forEach(p => {
+      if (!map.has(p.provider_id)) {
+        map.set(p.provider_id, { ...p, count: 1 });
+      } else {
+        map.get(p.provider_id).count++;
+      }
+    });
+  });
+  return [...map.values()].sort((a, b) => b.count - a.count || a.provider_name.localeCompare(b.provider_name));
+}
+
+/**
+ * Display the setup dialog asking the user whether to filter by streaming platforms for Top 5
+ */
+function showTop5Setup(fullPool, providers) {
+  const setupEl = top5Setup();
+  if (!setupEl) {
+    initTop5(fullPool);
+    return;
+  }
+
+  // Reset display
+  setupEl.classList.remove('hidden');
+  top5Grid().classList.add('hidden');
+  top5Loading().classList.add('hidden');
+  top5WinnerBanner().classList.add('hidden');
+  top5Counter().classList.add('hidden');
+
+  // I18n labels
+  if (top5SetupTitle()) top5SetupTitle().textContent = t('top5.setup_title');
+  if (top5SetupDesc()) top5SetupDesc().textContent = t('top5.setup_desc');
+  if (top5OptAllLabel()) top5OptAllLabel().textContent = t('top5.setup_all_opt', { count: fullPool.length });
+  if (top5OptAllSub()) top5OptAllSub().textContent = t('top5.setup_all_desc');
+  if (top5OptStreamLabel()) top5OptStreamLabel().textContent = t('top5.setup_stream_opt', { count: fullPool.filter(m => (state.commonProvidersMap[m.id]?.providers || []).length > 0).length });
+  if (top5OptStreamSub()) top5OptStreamSub().textContent = t('top5.setup_stream_desc');
+  if (btnTop5Start()) btnTop5Start().textContent = t('top5.setup_btn_start');
+
+  const chipsWrap = top5SetupChips();
+  const chipsContainer = top5ChipsContainer();
+  const startBtn = btnTop5Start();
+
+  const radioAll = setupEl.querySelector('input[value="all"]');
+  const radioStream = setupEl.querySelector('input[value="stream"]');
+
+  // Local set of selected providers for Top 5 (defaults to current active filter or all available)
+  const top5SelectedProviders = new Set(
+    state.selectedProviders.size > 0 ? state.selectedProviders : providers.map(p => p.provider_id)
+  );
+
+  const renderTop5Chips = () => {
+    if (!chipsContainer) return;
+    chipsContainer.innerHTML = '';
+
+    providers.forEach(p => {
+      const isSel = top5SelectedProviders.has(p.provider_id);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = `stream-chip ${isSel ? 'active' : ''}`;
+      chip.innerHTML = `
+        ${p.logo_path ? `<img class="stream-chip-logo" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" />` : ''}
+        <span>${escapeHtml(p.provider_name)}</span>
+        <span class="stream-chip-count">${p.count}</span>
+      `;
+      chip.addEventListener('click', () => {
+        if (top5SelectedProviders.has(p.provider_id)) {
+          top5SelectedProviders.delete(p.provider_id);
+        } else {
+          top5SelectedProviders.add(p.provider_id);
+        }
+        renderTop5Chips();
+        updateStartButtonState();
+      });
+      chipsContainer.appendChild(chip);
+    });
+  };
+
+  const updateStartButtonState = () => {
+    const isStreamChoice = radioStream?.checked;
+    if (isStreamChoice) {
+      const filteredCount = fullPool.filter(m => {
+        const pList = state.commonProvidersMap[m.id]?.providers || [];
+        return pList.some(p => top5SelectedProviders.has(p.provider_id));
+      }).length;
+
+      if (filteredCount === 0) {
+        startBtn.disabled = true;
+        startBtn.textContent = t('top5.setup_no_matches');
+      } else {
+        startBtn.disabled = false;
+        startBtn.textContent = `${t('top5.setup_btn_start')} (${filteredCount})`;
+      }
+    } else {
+      startBtn.disabled = false;
+      startBtn.textContent = `${t('top5.setup_btn_start')} (${fullPool.length})`;
+    }
+  };
+
+  const handleRadioChange = () => {
+    if (radioStream?.checked) {
+      chipsWrap?.classList.remove('hidden');
+      renderTop5Chips();
+    } else {
+      chipsWrap?.classList.add('hidden');
+    }
+    updateStartButtonState();
+  };
+
+  if (radioAll) radioAll.onchange = handleRadioChange;
+  if (radioStream) radioStream.onchange = handleRadioChange;
+
+  handleRadioChange();
+
+  startBtn.onclick = () => {
+    let finalPool = fullPool;
+    if (radioStream?.checked) {
+      finalPool = fullPool.filter(m => {
+        const pList = state.commonProvidersMap[m.id]?.providers || [];
+        return pList.some(p => top5SelectedProviders.has(p.provider_id));
+      });
+    }
+
+    setupEl.classList.add('hidden');
+    top5State.pool = finalPool;
+    initTop5(finalPool);
+  };
 }
 
 /**
@@ -2212,6 +2417,7 @@ function closeTop5() {
   document.body.style.overflow = '';
   stopConfetti();
   top5Grid().innerHTML = '';
+  top5Setup()?.classList.add('hidden');
   top5WinnerBanner().classList.add('hidden');
   top5Counter().classList.remove('hidden');
   top5Loading().classList.add('hidden');
@@ -2223,6 +2429,7 @@ function closeTop5() {
  */
 async function initTop5(pool) {
   // Reset UI
+  top5Setup()?.classList.add('hidden');
   top5Grid().innerHTML = '';
   top5WinnerBanner().classList.add('hidden');
   top5Counter().classList.remove('hidden');
@@ -2379,6 +2586,415 @@ const filmMetaCache = {
   },
 };
 
+// ─── TMDB PROVIDERS SERVICE & CACHE ──────────────────────────────────────────
+const tmdbConfig = {
+  get apiKey() {
+    return (window.APP_CONFIG && window.APP_CONFIG.TMDB_API_KEY) ? window.APP_CONFIG.TMDB_API_KEY.trim() : '';
+  },
+  get region() {
+    return (window.APP_CONFIG && window.APP_CONFIG.TMDB_REGION) ? window.APP_CONFIG.TMDB_REGION.trim().toUpperCase() : 'AR';
+  },
+  get ttlMs() {
+    const hours = (window.APP_CONFIG && window.APP_CONFIG.STREAMING_CACHE_TTL_HOURS) ? Number(window.APP_CONFIG.STREAMING_CACHE_TTL_HOURS) : 48;
+    return hours * 60 * 60 * 1000;
+  },
+  get maxConcurrency() {
+    return (window.APP_CONFIG && window.APP_CONFIG.TMDB_MAX_CONCURRENCY) ? Number(window.APP_CONFIG.TMDB_MAX_CONCURRENCY) : 6;
+  }
+};
+
+/**
+ * Persistent cache for TMDB movie search IDs and Watch Providers (flatrate subscription only)
+ * Namespace: lbmatch_v1_providers_{slug}_{region}
+ */
+const tmdbProviderCache = {
+  _key(slug, region) {
+    return `lbmatch_v1_providers_${slug}_${region.toLowerCase()}`;
+  },
+  get(slug, region) {
+    try {
+      const raw = localStorage.getItem(this._key(slug, region));
+      if (!raw) return undefined;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > tmdbConfig.ttlMs) {
+        localStorage.removeItem(this._key(slug, region));
+        return undefined;
+      }
+      return data; // { tmdbId, providers: [{ provider_id, provider_name, logo_path }] }
+    } catch { return undefined; }
+  },
+  set(slug, region, data) {
+    try {
+      localStorage.setItem(this._key(slug, region), JSON.stringify({ data, ts: Date.now() }));
+    } catch (e) {
+      console.warn('[TMDB Cache] write failed:', e.message);
+    }
+  }
+};
+
+/**
+ * Helper to build fetch options and query parameters for TMDB.
+ * Supports both API Key v3 (32 hex characters) and Bearer Read Access Token v4 (starts with "ey...").
+ */
+function getTmdbFetchConfig(endpointUrl) {
+  const rawKey = tmdbConfig.apiKey;
+  if (!rawKey) return null;
+
+  const isBearer = rawKey.startsWith('ey') || rawKey.length > 60;
+  if (isBearer) {
+    return {
+      url: endpointUrl,
+      options: {
+        headers: {
+          'Authorization': `Bearer ${rawKey}`,
+          'Accept': 'application/json'
+        }
+      }
+    };
+  } else {
+    const separator = endpointUrl.includes('?') ? '&' : '?';
+    return {
+      url: `${endpointUrl}${separator}api_key=${encodeURIComponent(rawKey)}`,
+      options: {
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    };
+  }
+}
+
+/**
+ * Search TMDB by movie title and optional year.
+ * Returns tmdbId (number) or null.
+ */
+async function searchTmdbMovie(title, year) {
+  const baseSearch = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(title)}&include_adult=false`;
+  const urlWithYear = year ? `${baseSearch}&year=${encodeURIComponent(year)}` : baseSearch;
+  const cfg = getTmdbFetchConfig(urlWithYear);
+  if (!cfg) return null;
+
+  try {
+    const res = await fetch(cfg.url, cfg.options);
+    if (!res.ok) {
+      console.warn(`[TMDB] Search failed for "${title}" (${res.status})`);
+      return null;
+    }
+    const json = await res.json();
+    const results = json.results || [];
+    if (results.length === 0) {
+      // If search with year returned nothing, try without year parameter as fallback
+      if (year) {
+        const fallbackCfg = getTmdbFetchConfig(baseSearch);
+        if (fallbackCfg) {
+          const fbRes = await fetch(fallbackCfg.url, fallbackCfg.options);
+          if (fbRes.ok) {
+            const fbJson = await fbRes.json();
+            if (fbJson.results && fbJson.results.length > 0) {
+              console.log(`[TMDB] Approximate match for "${title}" without year constraint: ID ${fbJson.results[0].id}`);
+              return fbJson.results[0].id;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    // Exact year match preferred
+    if (year) {
+      const exactMatch = results.find(r => r.release_date && r.release_date.startsWith(year));
+      if (exactMatch) return exactMatch.id;
+    }
+
+    console.log(`[TMDB] Match for "${title}" (${year || 'no year'}): ID ${results[0].id}`);
+    return results[0].id;
+  } catch (err) {
+    console.warn(`[TMDB] Search error for "${title}":`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch watch providers (flatrate) from TMDB for a specific movie ID and configured region.
+ */
+async function getTmdbWatchProviders(tmdbId, region) {
+  if (!tmdbId) return [];
+  const cfg = getTmdbFetchConfig(`https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers`);
+  if (!cfg) return [];
+
+  try {
+    const res = await fetch(cfg.url, cfg.options);
+    if (!res.ok) return [];
+
+    const json = await res.json();
+    const regionData = json.results?.[region];
+    if (!regionData) return [];
+
+    // Extract ONLY flatrate (subscription streaming), omitting rent / buy
+    const flatrate = regionData.flatrate || [];
+    return flatrate.map(p => ({
+      provider_id: p.provider_id,
+      provider_name: p.provider_name,
+      logo_path: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+      display_priority: p.display_priority ?? 999
+    }));
+  } catch (err) {
+    console.warn(`[TMDB] Providers error for ID ${tmdbId}:`, err.message);
+    return [];
+  }
+}
+
+/**
+ * Resolve TMDB ID and watch providers for a single movie (with cache).
+ */
+async function resolveMovieStreamingProviders(movie) {
+  const region = tmdbConfig.region;
+  const cached = tmdbProviderCache.get(movie.id, region);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const tmdbId = await searchTmdbMovie(movie.title, movie.year);
+  let providers = [];
+  if (tmdbId) {
+    providers = await getTmdbWatchProviders(tmdbId, region);
+  }
+
+  const result = { tmdbId, providers };
+  tmdbProviderCache.set(movie.id, region, result);
+  return result;
+}
+
+/**
+ * Throttled batch resolver for all common movies.
+ * Updates progress UI, updates cards with streaming badges, and renders dynamic filter chips.
+ */
+async function loadStreamingProvidersForCommonMovies(movies, searchId) {
+  const apiKey = tmdbConfig.apiKey;
+  if (!apiKey) {
+    if (streamingFilterBar) {
+      streamingFilterBar.classList.remove('hidden');
+      if (streamingChipsContainer) {
+        streamingChipsContainer.innerHTML = `<span class="movie-no-stream-badge" style="font-size:0.8rem;color:var(--text-muted);">${t('stream.tmdb_disabled')}</span>`;
+      }
+      if (streamingProgress) streamingProgress.classList.add('hidden');
+    }
+    return;
+  }
+
+  const region = tmdbConfig.region;
+  state.selectedProviders.clear();
+  state.commonProvidersMap = {};
+
+  if (!movies || movies.length === 0) {
+    if (streamingFilterBar) streamingFilterBar.classList.add('hidden');
+    return;
+  }
+
+  if (streamingFilterBar) streamingFilterBar.classList.remove('hidden');
+  if (streamingProgress) streamingProgress.classList.remove('hidden');
+  if (streamingFilterLabel) streamingFilterLabel.textContent = t('stream.filter_label');
+
+  let completed = 0;
+  const total = movies.length;
+  const updateProgress = () => {
+    if (streamingProgressText) {
+      streamingProgressText.textContent = t('stream.loading_providers', { region, current: completed, total });
+    }
+  };
+  updateProgress();
+
+  const concurrency = Math.min(tmdbConfig.maxConcurrency, 8);
+  let idx = 0;
+  let active = 0;
+
+  const allAvailableProvidersMap = new Map(); // provider_id -> { provider_id, provider_name, logo_path, count }
+
+  await new Promise(resolve => {
+    function next() {
+      if (state.currentSearchId !== searchId) return resolve();
+      if (idx >= movies.length && active === 0) return resolve();
+
+      while (active < concurrency && idx < movies.length) {
+        const movie = movies[idx++];
+        active++;
+
+        resolveMovieStreamingProviders(movie)
+          .then(data => {
+            if (state.currentSearchId !== searchId) return;
+            state.commonProvidersMap[movie.id] = data;
+
+            // Track available providers across the result set
+            (data.providers || []).forEach(p => {
+              if (!allAvailableProvidersMap.has(p.provider_id)) {
+                allAvailableProvidersMap.set(p.provider_id, { ...p, count: 1 });
+              } else {
+                allAvailableProvidersMap.get(p.provider_id).count++;
+              }
+            });
+
+            // Update individual movie card badge immediately
+            updateMovieCardProvidersUI(movie.id, data.providers, region);
+          })
+          .catch(err => {
+            console.warn(`[Streaming] Error processing ${movie.title}:`, err);
+          })
+          .finally(() => {
+            active--;
+            completed++;
+            updateProgress();
+            next();
+          });
+      }
+    }
+    next();
+  });
+
+  if (state.currentSearchId !== searchId) return;
+
+  if (streamingProgress) streamingProgress.classList.add('hidden');
+
+  // Render filter chips for platforms that actually appear in this comparison
+  renderStreamingFilterChips([...allAvailableProvidersMap.values()]);
+}
+
+/**
+ * Updates an individual movie card with its provider logos or "Not available" text
+ */
+function updateMovieCardProvidersUI(movieId, providers, region) {
+  const card = commonGrid?.querySelector(`[data-movie-id="${CSS.escape(movieId)}"]`);
+  if (!card) return;
+
+  const infoEl = card.querySelector('.movie-info');
+  if (!infoEl) return;
+
+  let existingRow = infoEl.querySelector('.movie-providers-row');
+  if (existingRow) existingRow.remove();
+
+  const row = document.createElement('div');
+  row.className = 'movie-providers-row';
+
+  if (providers && providers.length > 0) {
+    // Show top 4 provider icons max on card
+    const topProviders = providers.slice(0, 4);
+    row.innerHTML = topProviders.map(p => {
+      if (p.logo_path) {
+        return `<img class="movie-provider-icon" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" title="${escapeAttr(p.provider_name)}" loading="lazy" />`;
+      }
+      return '';
+    }).join('');
+  } else {
+    row.innerHTML = `<span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>`;
+  }
+
+  infoEl.appendChild(row);
+}
+
+/**
+ * Renders interactive filter chips
+ */
+function renderStreamingFilterChips(providers) {
+  if (!streamingChipsContainer) return;
+  streamingChipsContainer.innerHTML = '';
+
+  if (providers.length === 0) {
+    streamingChipsContainer.innerHTML = `<span class="movie-no-stream-badge" style="font-size:0.8rem;color:var(--text-muted);">${t('stream.not_available', { region: tmdbConfig.region })}</span>`;
+    return;
+  }
+
+  // Sort providers by count descending, then name
+  providers.sort((a, b) => b.count - a.count || a.provider_name.localeCompare(b.provider_name));
+
+  // "All" chip
+  const allChip = document.createElement('button');
+  allChip.className = `stream-chip ${state.selectedProviders.size === 0 ? 'active' : ''}`;
+  allChip.id = 'stream-chip-all';
+  allChip.innerHTML = `
+    <span>${t('stream.all_platforms')}</span>
+    <span class="stream-chip-count">${state.lastResults?.common?.length || 0}</span>
+  `;
+  allChip.addEventListener('click', () => {
+    state.selectedProviders.clear();
+    applyStreamingFilter();
+  });
+  streamingChipsContainer.appendChild(allChip);
+
+  // Platform chips
+  providers.forEach(p => {
+    const isSelected = state.selectedProviders.has(p.provider_id);
+    const chip = document.createElement('button');
+    chip.className = `stream-chip ${isSelected ? 'active' : ''}`;
+    chip.dataset.providerId = p.provider_id;
+    chip.innerHTML = `
+      ${p.logo_path ? `<img class="stream-chip-logo" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" />` : ''}
+      <span>${escapeHtml(p.provider_name)}</span>
+      <span class="stream-chip-count">${p.count}</span>
+    `;
+
+    chip.addEventListener('click', () => {
+      if (state.selectedProviders.has(p.provider_id)) {
+        state.selectedProviders.delete(p.provider_id);
+      } else {
+        state.selectedProviders.add(p.provider_id);
+      }
+      applyStreamingFilter();
+    });
+
+    streamingChipsContainer.appendChild(chip);
+  });
+}
+
+/**
+ * Applies client-side filtering to the common movies grid based on selected platforms
+ */
+function applyStreamingFilter() {
+  const chips = streamingChipsContainer?.querySelectorAll('.stream-chip');
+  chips?.forEach(chip => {
+    if (chip.id === 'stream-chip-all') {
+      chip.classList.toggle('active', state.selectedProviders.size === 0);
+    } else {
+      const pid = Number(chip.dataset.providerId);
+      chip.classList.toggle('active', state.selectedProviders.has(pid));
+    }
+  });
+
+  const cards = commonGrid?.querySelectorAll('.movie-card');
+  if (!cards) return;
+
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const movieId = card.dataset.movieId;
+    const movieData = state.commonProvidersMap[movieId];
+    const movieProviders = movieData?.providers || [];
+
+    let show = false;
+    if (state.selectedProviders.size === 0) {
+      show = true;
+    } else {
+      // Show if movie has ANY of the selected providers (OR logic)
+      show = movieProviders.some(p => state.selectedProviders.has(p.provider_id));
+    }
+
+    if (show) {
+      card.classList.remove('hidden');
+      visibleCount++;
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+
+  // Handle empty state when filter excludes all movies
+  if (visibleCount === 0 && cards.length > 0) {
+    if (commonEmpty) {
+      commonEmpty.classList.remove('hidden');
+      if (commonEmptyTitle) commonEmptyTitle.textContent = t('stream.no_matches_filter');
+      if (commonEmptyDesc) commonEmptyDesc.textContent = '';
+    }
+  } else if (cards.length > 0) {
+    if (commonEmpty) commonEmpty.classList.add('hidden');
+  }
+}
+
 /**
  * Enriches a grid already rendered with real posters, with limited concurrency
  * (3 at a time) to avoid saturating CORS proxies.
@@ -2457,27 +3073,37 @@ function renderTop5Cards(movies) {
     // Stars & synopsis
     const stars = ratingToStars(movie.rating);
     const starsHtml = stars
-      ? `<div class="top5-stars">${escapeHtml(stars)}</div>
-         <div class="top5-rating-label">${movie.rating?.toFixed(1)} / 5</div>`
-      : `<div class="top5-rating-label" style="font-size:.7rem;">${t('top5.no_rating')}</div>`;
+      ? `<div class="top5-stars">${escapeHtml(stars)} <span class="top5-rating-num">${movie.rating?.toFixed(1)}</span></div>`
+      : `<div class="top5-rating-num">${t('top5.no_rating')}</div>`;
 
-    const synopsis = movie.description
-      ? `<div class="top5-synopsis">${escapeHtml(movie.description.slice(0, 260))}</div>`
-      : `<div class="top5-synopsis" style="color:var(--text-muted);font-style:italic;">${t('top5.no_synopsis')}</div>`;
+    const synopsisText = movie.description || t('top5.no_synopsis');
+
+    // Providers for this movie
+    const pData = state.commonProvidersMap[movie.id]?.providers || [];
+    const region = tmdbConfig.region;
+    let providerIconsHtml = '';
+    if (pData.length > 0) {
+      providerIconsHtml = `
+        <div class="top5-card-providers">
+          ${pData.slice(0, 4).map(p => p.logo_path ? `<img class="top5-provider-icon" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" title="${escapeAttr(p.provider_name)}" />` : '').join('')}
+        </div>
+      `;
+    }
 
     card.innerHTML = `
       <div class="top5-poster-wrap">
         ${posterHtml}
-        <div class="top5-info-overlay">
-          ${starsHtml}
-          ${synopsis}
-        </div>
+        <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="${escapeAttr(t('top5.btn_eliminate_aria', { title: movie.title }))}" tabindex="0">×</button>
       </div>
       <div class="top5-card-info">
         <div class="top5-card-title">${escapeHtml(movie.title)}</div>
-        ${movie.year ? `<div class="top5-card-year">${movie.year}</div>` : ''}
+        <div class="top5-meta-row">
+          ${movie.year ? `<span class="top5-card-year">${movie.year}</span>` : ''}
+          ${starsHtml}
+        </div>
+        ${providerIconsHtml}
+        <p class="top5-card-synopsis">${escapeHtml(synopsisText)}</p>
       </div>
-      <button class="top5-eliminate-btn" data-id="${escapeAttr(movie.id)}" aria-label="${escapeAttr(t('top5.btn_eliminate_aria', { title: movie.title }))}" tabindex="0">×</button>
     `;
 
     // Soporte accesible de teclado por tarjeta

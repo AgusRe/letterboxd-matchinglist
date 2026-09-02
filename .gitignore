@@ -22,6 +22,7 @@ desktop.ini
 .env
 .env.local
 .env.*.local
+config.js
 
 # Logs and temporary files
 *.log

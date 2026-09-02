@@ -33,9 +33,10 @@ Ideal para cuando un grupo de amigos tiene que decidir qué ver juntos: en segun
 | 🎞️ **Paginación automática** | Extrae **todas** las páginas de cada lista (hasta 30 páginas), no solo las primeras 28 |
 | 🖼️ **Pósters, sinopsis y ratings reales** | Enriquecimiento on-demand vía `og:image`, `og:description` y `ratingValue` |
 | 🎲 **Top 5 Eliminator** | Modo de decisión interactivo con eliminación de tarjetas, foco accesible y confetti |
+| 📺 **Filtro por Streaming (TMDB)** | Filtra películas comunes por suscripción (Netflix, Prime, Max, Disney+, etc.) en tu país vía API oficial de TMDB |
 | 📊 **Películas únicas** | Pestañas con teclado para explorar lo exclusivo de cada usuario |
 | 🌐 **SEO Técnico y Schema.org** | Metadatos estáticos, JSON-LD (`WebApplication`, `WebSite`, `FAQPage`), Open Graph y `sitemap.xml` |
-| 💾 **Caché client-side** | Listas (30 min) y metadata de films (24 h) cacheadas localmente |
+| 💾 **Caché client-side** | Listas (30 min), metadata (24 h) y disponibilidad de streaming (48 h) en `localStorage` |
 | 💯 **100% estático** | HTML, CSS y Vanilla JS puro, sin build step, listo para GitHub Pages |
 
 ---
@@ -109,6 +110,38 @@ Para esos momentos en los que el grupo no sabe qué elegir:
    - Con mouse: hacé clic en la **×** de cada tarjeta.
    - Con teclado: navegá con las flechas (**←** / **→**) y presioná **Supr**, **Retroceso** o **Espacio** para descartar.
 5. **Ganador**: al quedar 1 sola película, se activa el banner de ganador con confetti y un enlace directo a Letterboxd.
+
+---
+
+## 📺 Filtro por Plataforma de Streaming (TMDB)
+
+La aplicación permite filtrar las películas que tienen en común según las plataformas de streaming disponibles en tu región (Netflix, Max, Prime Video, Disney+, Apple TV+, etc.):
+
+1. **Matching Automático:** Busca cada título y año en The Movie Database (TMDB).
+2. **Disponibilidad en Streaming:** Consulta el endpoint oficial `/movie/{id}/watch/providers` extrayendo las opciones de suscripción plana (*flatrate*).
+3. **Chips Dinámicos:** Muestra chips interactivos con los logos oficiales únicamente de las plataformas presentes en los resultados comunes de esa comparación.
+4. **Caché Inteligente:** Guarda las consultas en `localStorage` con un TTL de **48 horas** (`lbmatch_v1_providers_{slug}_{region}`) para respuestas ultrarrápidas y menor consumo de red.
+5. **Degradación Grácil:** Si no se configura una clave de TMDB o si la API falla, la comparación sigue funcionando normalmente y solo se desactiva el filtro de plataformas.
+
+### 🔑 Cómo configurar tu API Key de TMDB
+
+1. **Creá una cuenta gratuita en TMDB:** Registrate en [themoviedb.org](https://www.themoviedb.org/signup).
+2. **Generá tu API Key:**
+   - Andá a tu **Perfil → Configuración → API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)).
+   - Solicitá una API Key de tipo **Developer** (gratuita).
+   - Copiá tu **API Key (v3 auth)** (un string de 32 caracteres alfanuméricos).
+3. **Configurá el proyecto:**
+   - Creá un archivo `config.js` en la raíz del proyecto (podés copiar `config.example.js` como base).
+   - Pegá tu API Key y configurá tu país preferido (código ISO de 2 letras, ej. `AR`, `US`, `ES`, `MX`):
+     ```javascript
+     window.APP_CONFIG = {
+       TMDB_API_KEY: "tu_api_key_aqui_de_32_caracteres",
+       TMDB_REGION: "AR",              // País para catálogo de streaming
+       STREAMING_CACHE_TTL_HOURS: 48,  // Horas de caché
+       TMDB_MAX_CONCURRENCY: 6         // Concurrencia de peticiones
+     };
+     ```
+   - El archivo `config.js` está incluido en `.gitignore` para proteger tu clave privada.
 
 ---
 

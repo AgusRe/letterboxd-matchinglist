@@ -343,11 +343,30 @@
             </button>
           </div>
         </div>
+
+        <!-- Streaming Providers Filter Bar -->
+        <div id="streaming-filter-bar" class="streaming-filter-bar hidden" aria-label="Filtro de plataformas de streaming">
+          <div class="streaming-filter-header">
+            <div class="streaming-filter-title-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"/>
+                <polyline points="17 2 12 7 7 2"/>
+              </svg>
+              <span class="streaming-filter-title" id="streaming-filter-label">Filtrar por streaming:</span>
+            </div>
+            <div id="streaming-progress" class="streaming-progress hidden" aria-live="polite">
+              <span class="spinner-sm" aria-hidden="true"></span>
+              <span id="streaming-progress-text">Buscando plataformas…</span>
+            </div>
+          </div>
+          <div id="streaming-chips" class="streaming-chips" role="group" aria-label="Plataformas disponibles"></div>
+        </div>
+
         <div id="common-grid" class="movie-grid" aria-label="Películas en común"></div>
         <div id="common-empty" class="empty-state hidden">
           <span class="empty-icon">😕</span>
-          <p>No encontramos películas en común.</p>
-          <small>Probá con otros usuarios o diferentes listas.</small>
+          <p id="common-empty-title">No encontramos películas en común.</p>
+          <small id="common-empty-desc">Probá con otros usuarios o diferentes listas.</small>
         </div>
       </div>
 
@@ -560,6 +579,10 @@
         <p class="footer-disclaimer">
           Letterboxd Matcher es un proyecto de código abierto independiente y no está afiliado, respaldado ni asociado oficialmente con Letterboxd Limited.
         </p>
+        <p class="footer-tmdb-attribution">
+          <img src="favicons/tmdb-logo.svg" alt="TMDB Logo" class="tmdb-logo-img" onerror="this.style.display='none'" />
+          <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+        </p>
       </div>
       <div class="footer-col-right">
         <div id="proxy-health-indicator" class="proxy-health-indicator" title="Estado de conectividad y proxies CORS">
@@ -625,6 +648,42 @@
       </div>
     </div>
 
+    <!-- Top 5 Setup / Streaming Selector Step -->
+    <div id="top5-setup" class="top5-setup hidden" aria-label="Configuración de Top 5">
+      <div class="top5-setup-card">
+        <span class="top5-setup-icon">🍿</span>
+        <h3 class="top5-setup-title" id="top5-setup-title">¿Filtrar películas por Streaming?</h3>
+        <p class="top5-setup-desc" id="top5-setup-desc">Elegí si querés jugar con todas las películas en común o solo con las disponibles en tus plataformas.</p>
+
+        <div class="top5-setup-options">
+          <label class="top5-setup-opt">
+            <input type="radio" name="top5_filter_choice" value="all" checked />
+            <div class="top5-opt-content">
+              <span class="top5-opt-label" id="top5-opt-all-label">🎲 Todas las películas</span>
+              <span class="top5-opt-sub" id="top5-opt-all-sub">Sin restricción de streaming</span>
+            </div>
+          </label>
+          <label class="top5-setup-opt" id="top5-opt-stream-wrap">
+            <input type="radio" name="top5_filter_choice" value="stream" />
+            <div class="top5-opt-content">
+              <span class="top5-opt-label" id="top5-opt-stream-label">📺 Solo con plataformas seleccionadas</span>
+              <span class="top5-opt-sub" id="top5-opt-stream-sub">Elegí las plataformas activas</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Chips inside Top 5 setup for streaming -->
+        <div id="top5-setup-chips" class="top5-setup-chips hidden">
+          <div class="top5-chips-hint">Seleccioná una o más plataformas:</div>
+          <div id="top5-chips-container" class="streaming-chips"></div>
+        </div>
+
+        <div class="top5-setup-actions">
+          <button id="btn-top5-start" class="btn-top5-start">Comenzar Eliminator →</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Loading state -->
     <div id="top5-loading" class="top5-loading hidden">
       <div class="top5-loading-spinner"></div>
@@ -662,6 +721,7 @@
 
   </div>
 
+  <script src="config.js"></script>
   <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>

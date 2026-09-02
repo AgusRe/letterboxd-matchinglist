@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 273.42 22.8" width="120" height="18">
+  <defs>
+    <linearGradient id="tmdb_grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#90cea1" />
+      <stop offset="50%" stop-color="#01b4e4" />
+      <stop offset="100%" stop-color="#0d253f" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="273.42" height="22.8" rx="11.4" fill="url(#tmdb_grad)"/>
+  <text x="50%" y="15" font-family="'Source Sans Pro', Arial, sans-serif" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle" letter-spacing="2">THE MOVIE DB</text>
+</svg>
