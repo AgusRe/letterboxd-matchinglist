@@ -575,18 +575,36 @@
           Made with <span aria-label="love">❤️</span> for film lovers by <a href="https://github.com/AgusRe" target="_blank" rel="noopener noreferrer"><strong>AgusRe</strong></a> · Public data scraped / fetched via <a
             href="https://letterboxd.com" target="_blank" rel="noopener noreferrer">Letterboxd</a>.
         </p>
-        <p class="footer-disclaimer">
-          Letterboxd Matcher is an independent open-source project and is not affiliated, endorsed, or associated officially with Letterboxd Limited.
-        </p>
-        <p class="footer-tmdb-attribution">
-          <img src="../favicons/tmdb-logo.svg" alt="TMDB Logo" class="tmdb-logo-img" onerror="this.style.display='none'" />
-          <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
-        </p>
       </div>
       <div class="footer-col-right">
         <div id="proxy-health-indicator" class="proxy-health-indicator" title="Connectivity status and CORS proxies">
           <span class="proxy-health-dot dot-green" id="proxy-health-dot"></span>
           <span id="proxy-health-label">Connection: Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legal, TMDB Attribution & Privacy Notice -->
+    <div class="container footer-legal-wrapper">
+      <div class="footer-legal-divider" aria-hidden="true"></div>
+      <div class="footer-legal-content">
+        <!-- TMDB Attribution -->
+        <div class="footer-legal-item footer-tmdb-attribution">
+          <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="tmdb-brand-badge" title="The Movie Database (TMDB)">
+            <img src="../assets/tmdb-logo.svg" alt="TMDB (The Movie Database)" class="tmdb-logo-img" width="90" height="12" />
+          </a>
+          <p id="footer-tmdb-text" class="footer-legal-text"></p>
+        </div>
+
+        <!-- Disclaimers & Privacy -->
+        <div class="footer-legal-item">
+          <p id="footer-letterboxd-text" class="footer-legal-text"></p>
+        </div>
+        <div class="footer-legal-item">
+          <p id="footer-warranty-text" class="footer-legal-text"></p>
+        </div>
+        <div class="footer-legal-item">
+          <p id="footer-privacy-text" class="footer-legal-text footer-privacy-note"></p>
         </div>
       </div>
     </div>

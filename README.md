@@ -1,5 +1,7 @@
 # 🎬 Letterboxd Matcher
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-00c774.svg)](LICENSE)
+
 > **Descubrí qué películas tienen en común vos y tus amigos en Letterboxd** — sin registrarte, sin API key, sin backend propio que mantener.
 
 **[🌐 Ver demo en vivo →](https://agusre.github.io/letterboxd-matchinglist/)**
@@ -287,7 +289,7 @@ letterboxd-matchinglist/
 
 ## 📄 Licencia
 
-MIT — libre uso, modificación y distribución.
+Este proyecto está bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
 
 ---
 

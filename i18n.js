@@ -126,7 +126,14 @@ const TRANSLATIONS = {
     "stream.no_matches_filter": "No hay películas que coincidan con las plataformas seleccionadas.",
     "stream.tmdb_disabled": "Filtro de streaming desactivado (configurá tu TMDB API Key en config.js)",
     "stream.tmdb_error": "No se pudo conectar con TMDB para consultar streaming.",
-    "stream.badge_stream": "Streaming"
+    "stream.badge_stream": "Streaming",
+
+    // ── Legal & Footer ──
+    // TODO: Si en el futuro se incorpora algún servicio de analítica web (ej. GA, Plausible), actualizar esta nota de privacidad.
+    "footer.tmdb_notice": "Este producto utiliza la API de TMDB, pero no está respaldado ni certificado por TMDB.",
+    "footer.letterboxd_disclaimer": "Este sitio es un proyecto personal e independiente desarrollado con fines recreativos y no está afiliado, respaldado ni asociado de ninguna manera con Letterboxd Limited.",
+    "footer.no_warranty": "El servicio se provee 'tal cual' (as is), sin garantías sobre la disponibilidad permanente o exactitud de los datos de terceros (Letterboxd, TMDB). El funcionamiento depende de servicios externos que pueden cambiar sin previo aviso.",
+    "footer.privacy_note": "No recopilamos ni almacenamos tus datos en ningún servidor — tu historial de búsquedas y comparaciones vive únicamente en el almacenamiento local de tu navegador."
   },
 
   en: {
@@ -249,7 +256,14 @@ const TRANSLATIONS = {
     "stream.no_matches_filter": "No common movies match the selected streaming platforms.",
     "stream.tmdb_disabled": "Streaming filter disabled (configure your TMDB API Key in config.js)",
     "stream.tmdb_error": "Could not connect to TMDB to fetch streaming providers.",
-    "stream.badge_stream": "Streaming"
+    "stream.badge_stream": "Streaming",
+
+    // ── Legal & Footer ──
+    // TODO: If web analytics (e.g. GA, Plausible) is added in the future, update this privacy note.
+    "footer.tmdb_notice": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+    "footer.letterboxd_disclaimer": "This site is a personal and independent project developed for recreational purposes and is not affiliated, endorsed, or associated in any way with Letterboxd Limited.",
+    "footer.no_warranty": "The service is provided 'as is', without warranties regarding continuous availability or accuracy of third-party data (Letterboxd, TMDB). Functionality relies on external services that may change without prior notice.",
+    "footer.privacy_note": "We do not collect or store your data on any server — your search and comparison history lives solely in your browser's local storage."
   }
 };
 

@@ -838,6 +838,20 @@ function initProxyHealthUI() {
   label.textContent = t('proxy.label_ready');
 }
 
+// ─── FOOTER LEGAL & PRIVACY ──────────────────────────────────────────────────
+// TODO: Si en el futuro se incorpora algún servicio de analítica web (ej. Google Analytics, Plausible), actualizar esta nota de privacidad.
+function initFooterLegal() {
+  const tmdbEl = $('#footer-tmdb-text');
+  const lbEl = $('#footer-letterboxd-text');
+  const warrantyEl = $('#footer-warranty-text');
+  const privacyEl = $('#footer-privacy-text');
+
+  if (tmdbEl) tmdbEl.textContent = t('footer.tmdb_notice');
+  if (lbEl) lbEl.textContent = t('footer.letterboxd_disclaimer');
+  if (warrantyEl) warrantyEl.textContent = t('footer.no_warranty');
+  if (privacyEl) privacyEl.textContent = t('footer.privacy_note');
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
 function init() {
@@ -845,6 +859,7 @@ function init() {
   setupEventListeners();
   initHistoryUI();
   initProxyHealthUI();
+  initFooterLegal();
   const loadedFromUrl = parseUrlParamsOnLoad();
   if (!loadedFromUrl) {
     preloadLastSearch();
