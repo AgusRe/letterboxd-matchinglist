@@ -1366,8 +1366,8 @@ async function handleRetryUser(rowIndex) {
 /**
  * Normalize a Letterboxd page URL or username.
  * Supports:
- *   - usernames ("agusre" or "@agusre" in watchlist mode) -> "https://letterboxd.com/agusre/watchlist/"
- *   - profile URLs ("https://letterboxd.com/agusre/" in watchlist mode) -> "https://letterboxd.com/agusre/watchlist/"
+ *   - usernames ("user" or "@user" in watchlist mode) -> "https://letterboxd.com/user/watchlist/"
+ *   - profile URLs ("https://letterboxd.com/user/" in watchlist mode) -> "https://letterboxd.com/user/watchlist/"
  *   - list URLs ("https://letterboxd.com/user/list/name/") -> kept as-is
  * Strips trailing /rss/ or /page/N/ and ensures trailing slash.
  */
@@ -1392,7 +1392,6 @@ function normalizePageUrl(input) {
     if (host === 'letterboxd.com') {
       const parts = u.pathname.split('/').filter(Boolean);
       if (state.sourceMode === 'watchlist') {
-        // Si el usuario puso su perfil (/agusre/) o ruta sin watchlist
         if (parts.length >= 1 && parts[1] !== 'watchlist') {
           return `https://letterboxd.com/${parts[0]}/watchlist/`;
         }

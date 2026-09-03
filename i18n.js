@@ -25,7 +25,7 @@ const TRANSLATIONS = {
     "val.stopped": "Búsqueda detenida por el usuario",
     "val.btn_retry": "Reintentar",
     "val.btn_remove": "Eliminar usuario {index}",
-    "val.user_placeholder_watchlist": "Usuario o URL (ej. agusre)",
+    "val.user_placeholder_watchlist": "Usuario o URL",
     "val.user_placeholder_list": "URL de lista de Letterboxd",
     "val.user_aria_input": "Usuario o lista {index}",
 
