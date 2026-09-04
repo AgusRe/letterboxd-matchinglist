@@ -33,9 +33,18 @@ function syncLangToggle() {
  */
 const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
+const DEFAULT_WORKER_BASE_URL = 'https://letterboxd-proxy.agustin2-re.workers.dev';
+
+function getWorkerBaseUrl() {
+  const url = (window.APP_CONFIG && window.APP_CONFIG.WORKER_BASE_URL)
+    ? window.APP_CONFIG.WORKER_BASE_URL.trim()
+    : DEFAULT_WORKER_BASE_URL;
+  return url.replace(/\/+$/, '');
+}
+
 const PROXIES = [
   ...(isLocalDev ? [{ url: 'http://localhost:3000/proxy?url=', mode: 'text', name: 'Localhost (Node)' }] : []),
-  { url: 'https://letterboxd-proxy.agustin2-re.workers.dev/?url=', mode: 'text', name: 'Cloudflare Worker' },
+  { url: `${getWorkerBaseUrl()}/?url=`, mode: 'text', name: 'Cloudflare Worker' },
   { url: 'https://api.allorigins.win/raw?url=', mode: 'text', name: 'AllOrigins' },
 ];
 // ─── CACHE (localStorage · TTL 30 min · opt-out via forceRefresh) ────────────
@@ -67,7 +76,7 @@ const letterboxdCache = {
     try {
       localStorage.setItem(this._key(url), JSON.stringify({ data, ts: Date.now() }));
     } catch (e) {
-      console.warn('[Cache] localStorage write failed:', e.message);
+      console.error('[Cache] localStorage write failed:', e.message);
     }
   },
   invalidate(url) {
@@ -143,7 +152,7 @@ const comparisonHistory = {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(capped));
       renderHistoryUI();
     } catch (e) {
-      console.warn('[History] localStorage write failed:', e.message);
+      console.error('[History] localStorage write failed:', e.message);
     }
   },
   removeEntry(id) {
@@ -203,6 +212,7 @@ const state = {
   lastSuccessfulProxy: null,
   selectedProviders: new Set(), // Set de provider_id seleccionados para filtrar
   commonProvidersMap: {},       // { [movieId]: { tmdbId, providers: [{ provider_id, provider_name, logo_path }] } }
+  tmdbLastError: null,          // null | 'worker_unavailable' | 'tmdb_error'
 };
 
 /** State for the Top 5 Eliminator mode */
@@ -250,6 +260,10 @@ const commonEmptyTitle = $('#common-empty-title');
 const commonEmptyDesc = $('#common-empty-desc');
 const uniqueTabs = $('#unique-tabs');
 const uniquePanels = $('#unique-panels');
+const btnLoadUniqueStreaming = $('#btn-load-unique-streaming');
+const btnLoadUniqueStreamingText = $('#btn-load-unique-streaming-text');
+const uniqueStreamingProgress = $('#unique-streaming-progress');
+const uniqueStreamingProgressText = $('#unique-streaming-progress-text');
 const movieModal = $('#movie-modal');
 const modalContent = $('#modal-content');
 const modalCloseBtn = $('#modal-close-btn');
@@ -610,7 +624,7 @@ function updateUrlParams(mode, rawInputs) {
     window.history.replaceState({ mode, inputs: rawInputs }, '', url.toString());
     syncLangToggle();
   } catch (e) {
-    console.warn('[URL] Could not update params:', e);
+    console.error('[URL] Could not update params:', e);
   }
 }
 
@@ -654,7 +668,7 @@ function parseUrlParamsOnLoad() {
 
     return true;
   } catch (e) {
-    console.warn('[URL] Error parsing params:', e);
+    console.error('[URL] Error parsing params:', e);
     return false;
   }
 }
@@ -1122,6 +1136,11 @@ function setupEventListeners() {
   // Share results URL (Feature 3)
   btnShareResults?.addEventListener('click', handleCopyShareLink);
 
+  // Load streaming providers for unique movies
+  btnLoadUniqueStreaming?.addEventListener('click', () => {
+    loadStreamingProvidersForUniqueMovies();
+  });
+
   // Modal close
   modalCloseBtn.addEventListener('click', closeModal);
   movieModal.addEventListener('click', (e) => {
@@ -1218,7 +1237,6 @@ async function handleCompare() {
         letterboxdCache.invalidate(item.pageUrl);
         delete state.userResults[item.pageUrl];
       });
-      console.log('[Cache] Force refresh — invalidated', inputData.length, 'entries');
     }
 
     // Escalonamos el arranque de cada usuario (400ms entre uno y otro) para no
@@ -1314,7 +1332,6 @@ async function handleRetryUser(rowIndex) {
 
   // 1) Requisito clave: el botón "Reintentar" invalida la caché de ESE usuario específicamente
   letterboxdCache.invalidate(pageUrl);
-  console.log(`[Cache] 🔄 Invalidadas entradas para retry de "${label}" (${pageUrl})`);
 
   setRowStatus(rowIndex, 'loading', t('val.retrying_user', { label }), false);
 
@@ -1462,7 +1479,6 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
   // ── Cache lookup ────────────────────────────────────────────────────────────
   const cached = letterboxdCache.get(baseUrl);
   if (cached) {
-    console.log(`[Cache] ⚡ Hit for "${label}" (${cached.length} films)`);
     updateLoadingMessage(`⚡ ${label} (${cached.length})`);
     reportProxyStatus({ user: label, status: 'success', name: t('proxy.local_cache'), elapsed: 0 });
     await sleep(150);
@@ -1486,7 +1502,6 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
     try {
       html = await fetchViaFastestProxy(pageUrl, 12000, label);
     } catch (firstErr) {
-      console.warn(`[${label}] p${page} falló, reintentando en 1s…`);
       reportProxyStatus({ user: label, status: 'fallback', name: 'Reintento p' + page });
       await sleep(1000);
       try {
@@ -1499,7 +1514,6 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
             err.message
           );
         }
-        console.warn(`[${label}] p${page} all proxies failed — stopping pagination.`);
         break;
       }
     }
@@ -1510,7 +1524,6 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
       break;
     }
 
-    console.log(`[${label}] p${page} ✅ ${html.length} chars`);
     const movies = parseHtmlFilmPosters(html, label);
 
     if (movies.length === 0) {
@@ -1522,7 +1535,6 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
         if (movies.length <= 28) perPage = FILMS_PER_PAGE_WATCHLIST;
         else if (movies.length <= 72) perPage = 72;
         else perPage = movies.length;
-        console.log(`[${label}] Auto-detected perPage = ${perPage} (got ${movies.length} on p1)`);
       }
 
       if (movies.length < perPage) {
@@ -1534,15 +1546,12 @@ async function fetchAndParseList(baseUrl, label, searchId = null, fetchId = null
   }
 
   if (allMovies.length === 0) {
-    console.warn(`[${label}] No se encontraron películas. La lista puede estar vacía o ser privada.`);
+    console.error(`[${label}] No se encontraron películas. La lista puede estar vacía o ser privada.`);
   }
-
-  console.log(`[${label}] Total: ${allMovies.length} películas en ${page} página(s)`);
 
   // ── Persist to cache (only if we got actual data) ────────────────────────────
   if (allMovies.length > 0) {
     letterboxdCache.set(baseUrl, allMovies);
-    console.log(`[Cache] 💾 Saved "${label}" (${allMovies.length} films, TTL: 30 min)`);
   }
 
   return allMovies;
@@ -1592,7 +1601,6 @@ async function fetchViaFastestProxy(targetUrl, timeout = 12000, label = '') {
     reportProxyStatus({ user: label, status: 'attempt', name: primary.name, host: primary.url.split('/')[2] });
     return await attemptProxy(primary, targetUrl, timeout, label);
   } catch (err) {
-    console.warn(`[Proxy] ⚠️ Proxy principal falló (${primary.name || primary.url.split('/')[2]}), probando fallbacks…`);
     reportProxyStatus({ user: label, status: 'fallback', name: primary.name, host: primary.url.split('/')[2], error: err.message });
   }
 
@@ -1650,13 +1658,11 @@ async function attemptProxy(proxy, targetUrl, timeout, label = '') {
     const elapsed = Date.now() - t0;
     if (!_proxySpeedLog[host]) _proxySpeedLog[host] = [];
     _proxySpeedLog[host].push(elapsed);
-    console.log(`[Proxy] ✅ ${proxyName} — ${elapsed}ms (${html.length} chars)`);
 
     reportProxyStatus({ user: label, status: 'success', name: proxyName, host, elapsed });
 
     return html;
   } catch (err) {
-    console.warn(`[Proxy] ❌ ${proxyName} — ${err.message}`);
     throw err;
   }
 }
@@ -1822,7 +1828,6 @@ function parseHtmlFilmPosters(html, label) {
 
   // ── Fallback: extract slugs from all /film/SLUG/ hrefs in the raw HTML ──────
   if (movies.length === 0) {
-    console.log(`[${label}] DOM parse found 0 posters, falling back to href regex`);
     const slugSet = new Set();
     const hrefMatches = html.matchAll(/href=["']\/film\/([a-z0-9-]+)\/["']/g);
     for (const m of hrefMatches) {
@@ -1840,7 +1845,6 @@ function parseHtmlFilmPosters(html, label) {
         description: '',
       });
     }
-    console.log(`[${label}] href fallback found ${movies.length} slugs`);
   }
 
   return movies;
@@ -1973,6 +1977,19 @@ function renderResults(comparison, userLabels) {
 
   // Unique per user tabs
   renderUniqueTabs(uniqueByUser, allUsers);
+
+  // Reset unique streaming button & progress
+  state.uniqueProvidersLoaded = false;
+  if (btnLoadUniqueStreaming) {
+    btnLoadUniqueStreaming.disabled = false;
+    btnLoadUniqueStreaming.classList.remove('loading');
+    if (btnLoadUniqueStreamingText) {
+      btnLoadUniqueStreamingText.textContent = t('unique.load_streaming');
+    }
+  }
+  if (uniqueStreamingProgress) {
+    uniqueStreamingProgress.classList.add('hidden');
+  }
 
   resultsSection.classList.remove('hidden');
   resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2146,6 +2163,22 @@ function createMovieCard(movie, index, isCommon) {
     </div>
   `;
 
+  // Render provider badges if already available in state
+  const movieData = state.commonProvidersMap[movie.id];
+  const providers = movieData?.providers || [];
+  if (providers.length > 0) {
+    const row = document.createElement('div');
+    row.className = 'movie-providers-row';
+    const topProviders = providers.slice(0, 4);
+    row.innerHTML = topProviders.map(p => {
+      if (p.logo_path) {
+        return `<img class="movie-provider-icon" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" title="${escapeAttr(p.provider_name)}" loading="lazy" />`;
+      }
+      return '';
+    }).join('');
+    card.querySelector('.movie-info')?.appendChild(row);
+  }
+
   const openModal = () => openMovieModal(movie, isCommon);
   card.addEventListener('click', openModal);
   card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openModal(); });
@@ -2163,6 +2196,17 @@ function openMovieModal(movie, isCommon) {
   movieModal.removeAttribute('aria-hidden');
   modalCloseBtn.focus();
   document.body.style.overflow = 'hidden';
+
+  // If providers not yet loaded for this movie, fetch on-the-fly
+  if (tmdbConfig.isConfigured && !state.commonProvidersMap[movie.id]) {
+    resolveMovieStreamingProviders(movie).then(data => {
+      state.commonProvidersMap[movie.id] = data;
+      if (!movieModal.classList.contains('hidden') && modalContent.dataset.movieId === movie.id) {
+        renderModalContent(movie, isCommon, false);
+      }
+      updateMovieCardProvidersUI(movie.id, data.providers, tmdbConfig.region);
+    });
+  }
 
   if (needsData) {
     enrichMovieMeta(movie).then(meta => {
@@ -2201,7 +2245,7 @@ function renderModalContent(movie, isCommon, loading) {
   const region = tmdbConfig.region;
   let providersHtml = '';
 
-  if (tmdbConfig.apiKey) {
+  if (tmdbConfig.isConfigured) {
     if (providers.length > 0) {
       providersHtml = `
         <div class="modal-providers-section">
@@ -2223,11 +2267,14 @@ function renderModalContent(movie, isCommon, loading) {
         </div>
       `;
     } else if (movieData && providers.length === 0) {
-      providersHtml = `
-        <div class="modal-providers-section">
-          <span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>
-        </div>
-      `;
+      // Only show 'not available' if TMDB was queried successfully and confirmed no flatrate providers
+      if (!state.tmdbLastError) {
+        providersHtml = `
+          <div class="modal-providers-section">
+            <span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>
+          </div>
+        `;
+      }
     }
   }
 
@@ -2485,14 +2532,23 @@ async function enrichMovieMeta(movie) {
   // ── Caché hit: evita re-pedir lo que ya conseguimos antes ─────────────────
   const cached = filmMetaCache.get(movie.id);
   if (cached) {
+    if (cached.tmdbId && !movie.tmdbId) {
+      movie.tmdbId = cached.tmdbId;
+    }
     return {
       poster: cached.poster ?? movie.poster ?? null,
       description: cached.description || movie.description || '',
       rating: cached.rating ?? null,
+      tmdbId: cached.tmdbId ?? null,
     };
   }
 
-  const result = { poster: movie.poster || null, description: movie.description || '', rating: null };
+  const result = {
+    poster: movie.poster || null,
+    description: movie.description || '',
+    rating: null,
+    tmdbId: movie.tmdbId || null
+  };
   try {
     // ── Fetch film page via fastest available proxy ────────────────────────────
     let html;
@@ -2503,6 +2559,19 @@ async function enrichMovieMeta(movie) {
     }
 
     if (!html) return result;
+
+    // ── TMDB ID directly from Letterboxd HTML ────────────────────────────────
+    const tmdbMatch =
+      html.match(/data-tmdb-id=["'](\d+)["']/i) ||
+      html.match(/themoviedb\.org\/movie\/(\d+)/i) ||
+      html.match(/href=["']https?:\/\/www\.themoviedb\.org\/movie\/(\d+)/i);
+    if (tmdbMatch?.[1]) {
+      const parsedTmdbId = parseInt(tmdbMatch[1], 10);
+      if (!isNaN(parsedTmdbId)) {
+        result.tmdbId = parsedTmdbId;
+        movie.tmdbId = parsedTmdbId;
+      }
+    }
 
     // ── og:image → high-res poster ───────────────────────────────────────────
     // Robust regex: tolerates any attribute order (property/content either first)
@@ -2564,11 +2633,16 @@ async function enrichMovieMeta(movie) {
       result.description = 'Sinopsis no disponible en Letterboxd';
     }
   } catch (err) {
-    console.warn('[enrichMovieMeta]', movie.id, err.message);
+    console.error('[enrichMovieMeta]', movie.id, err.message);
   }
 
   // ── Guardar en caché solo si llegamos hasta acá (hubo respuesta del proxy) ─
-  filmMetaCache.set(movie.id, { poster: result.poster, description: result.description, rating: result.rating });
+  filmMetaCache.set(movie.id, {
+    poster: result.poster,
+    description: result.description,
+    rating: result.rating,
+    tmdbId: result.tmdbId
+  });
 
   return result;
 }
@@ -2602,8 +2676,11 @@ const filmMetaCache = {
 
 // ─── TMDB PROVIDERS SERVICE & CACHE ──────────────────────────────────────────
 const tmdbConfig = {
-  get apiKey() {
-    return (window.APP_CONFIG && window.APP_CONFIG.TMDB_API_KEY) ? window.APP_CONFIG.TMDB_API_KEY.trim() : '';
+  get workerBaseUrl() {
+    return getWorkerBaseUrl();
+  },
+  get isConfigured() {
+    return Boolean((window.APP_CONFIG && window.APP_CONFIG.TMDB_API_KEY) || this.workerBaseUrl);
   },
   get region() {
     return (window.APP_CONFIG && window.APP_CONFIG.TMDB_REGION) ? window.APP_CONFIG.TMDB_REGION.trim().toUpperCase() : 'AR';
@@ -2634,6 +2711,11 @@ const tmdbProviderCache = {
         localStorage.removeItem(this._key(slug, region));
         return undefined;
       }
+      // If cached data was an empty result from a failed query (no valid tmdbId), invalidate it
+      if (data && !data.tmdbId) {
+        localStorage.removeItem(this._key(slug, region));
+        return undefined;
+      }
       return data; // { tmdbId, providers: [{ provider_id, provider_name, logo_path }] }
     } catch { return undefined; }
   },
@@ -2641,49 +2723,88 @@ const tmdbProviderCache = {
     try {
       localStorage.setItem(this._key(slug, region), JSON.stringify({ data, ts: Date.now() }));
     } catch (e) {
-      console.warn('[TMDB Cache] write failed:', e.message);
+      console.error('[TMDB Cache] write failed:', e.message);
     }
   }
 };
 
 /**
- * Helper to build fetch options and query parameters for TMDB.
- * Supports both API Key v3 (32 hex characters) and Bearer Read Access Token v4 (starts with "ey...").
+ * Helper to build fetch options and endpoint URL for TMDB.
+ * Supports:
+ *  1. Direct TMDB API key if defined in window.APP_CONFIG.TMDB_API_KEY (supports v3 key or v4 Bearer token).
+ *  2. Local development server (http://localhost:3000) via proxy-server.js to prevent CORS blocks.
+ *  3. Cloudflare Worker reverse proxy in production (window.APP_CONFIG.WORKER_BASE_URL).
  */
-function getTmdbFetchConfig(endpointUrl) {
-  const rawKey = tmdbConfig.apiKey;
-  if (!rawKey) return null;
+function getTmdbFetchConfig(endpointPath) {
+  // Option 1: Direct TMDB API if key is explicitly configured in client config
+  const directApiKey = (window.APP_CONFIG && window.APP_CONFIG.TMDB_API_KEY) ? window.APP_CONFIG.TMDB_API_KEY.trim() : '';
+  if (directApiKey) {
+    const isBearer = directApiKey.startsWith('ey') || directApiKey.length > 60;
+    let cleanPath = endpointPath.replace(/^\/?(tmdb\/)?/, '');
+    if (cleanPath.startsWith('https://api.themoviedb.org/3/')) {
+      cleanPath = cleanPath.replace('https://api.themoviedb.org/3/', '');
+    }
+    const separator = cleanPath.includes('?') ? '&' : '?';
+    const finalUrl = isBearer
+      ? `https://api.themoviedb.org/3/${cleanPath}`
+      : `https://api.themoviedb.org/3/${cleanPath}${separator}api_key=${encodeURIComponent(directApiKey)}`;
 
-  const isBearer = rawKey.startsWith('ey') || rawKey.length > 60;
-  if (isBearer) {
     return {
-      url: endpointUrl,
+      url: finalUrl,
       options: {
         headers: {
-          'Authorization': `Bearer ${rawKey}`,
-          'Accept': 'application/json'
-        }
-      }
-    };
-  } else {
-    const separator = endpointUrl.includes('?') ? '&' : '?';
-    return {
-      url: `${endpointUrl}${separator}api_key=${encodeURIComponent(rawKey)}`,
-      options: {
-        headers: {
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...(isBearer ? { 'Authorization': `Bearer ${directApiKey}` } : {})
         }
       }
     };
   }
+
+  // Option 2: Reverse proxy (local dev proxy-server.js or remote Cloudflare Worker)
+  const workerBase = isLocalDev ? window.location.origin : tmdbConfig.workerBaseUrl;
+  if (!workerBase) return null;
+
+  // Normalize path: support '/search/movie?...', 'search/movie?...', or legacy full URLs
+  let path = endpointPath;
+  if (path.startsWith('https://api.themoviedb.org/3/')) {
+    path = path.replace('https://api.themoviedb.org/3/', '');
+  }
+  if (path.startsWith(`${workerBase}/tmdb/`)) {
+    path = path.slice(`${workerBase}/tmdb/`.length);
+  } else if (path.startsWith('/tmdb/')) {
+    path = path.slice('/tmdb/'.length);
+  }
+  if (path.startsWith('/')) {
+    path = path.slice(1);
+  }
+
+  let finalUrl = `${workerBase}/tmdb/${path}`;
+
+  // Ensure no api_key query param is present when using proxy
+  try {
+    const parsed = new URL(finalUrl);
+    if (parsed.searchParams.has('api_key')) {
+      parsed.searchParams.delete('api_key');
+      finalUrl = parsed.toString();
+    }
+  } catch { }
+
+  return {
+    url: finalUrl,
+    options: {
+      headers: {
+        'Accept': 'application/json'
+      }
+    }
+  };
 }
 
 /**
- * Search TMDB by movie title and optional year.
+ * Search TMDB by movie title and optional year via the Worker proxy.
  * Returns tmdbId (number) or null.
  */
 async function searchTmdbMovie(title, year) {
-  const baseSearch = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(title)}&include_adult=false`;
+  const baseSearch = `/search/movie?query=${encodeURIComponent(title)}&include_adult=false`;
   const urlWithYear = year ? `${baseSearch}&year=${encodeURIComponent(year)}` : baseSearch;
   const cfg = getTmdbFetchConfig(urlWithYear);
   if (!cfg) return null;
@@ -2691,23 +2812,48 @@ async function searchTmdbMovie(title, year) {
   try {
     const res = await fetch(cfg.url, cfg.options);
     if (!res.ok) {
-      console.warn(`[TMDB] Search failed for "${title}" (${res.status})`);
+      if (res.status === 401) {
+        state.tmdbLastError = 'tmdb_auth_error';
+      } else if (res.status === 403 || res.status >= 500) {
+        state.tmdbLastError = 'worker_unavailable';
+      } else {
+        state.tmdbLastError = 'tmdb_error';
+      }
       return null;
     }
     const json = await res.json();
+    if (json.success === false || json.status_code) {
+      if (json.status_code === 7 || json.status_code === 3) {
+        state.tmdbLastError = 'tmdb_auth_error';
+      } else {
+        state.tmdbLastError = 'tmdb_error';
+      }
+      return null;
+    }
     const results = json.results || [];
     if (results.length === 0) {
       // If search with year returned nothing, try without year parameter as fallback
       if (year) {
         const fallbackCfg = getTmdbFetchConfig(baseSearch);
         if (fallbackCfg) {
-          const fbRes = await fetch(fallbackCfg.url, fallbackCfg.options);
-          if (fbRes.ok) {
-            const fbJson = await fbRes.json();
-            if (fbJson.results && fbJson.results.length > 0) {
-              console.log(`[TMDB] Approximate match for "${title}" without year constraint: ID ${fbJson.results[0].id}`);
-              return fbJson.results[0].id;
+          try {
+            const fbRes = await fetch(fallbackCfg.url, fallbackCfg.options);
+            if (fbRes.ok) {
+              const fbJson = await fbRes.json();
+              const fbResults = fbJson.results || [];
+              if (fbResults.length > 0) {
+                // Try to match closest year (+/- 1 year)
+                const numYear = parseInt(year, 10);
+                const closeMatch = fbResults.find(r => {
+                  if (!r.release_date) return false;
+                  const ry = parseInt(r.release_date.slice(0, 4), 10);
+                  return Math.abs(ry - numYear) <= 1;
+                });
+                return closeMatch ? closeMatch.id : fbResults[0].id;
+              }
             }
+          } catch {
+            // Silenced fallback error
           }
         }
       }
@@ -2718,29 +2864,54 @@ async function searchTmdbMovie(title, year) {
     if (year) {
       const exactMatch = results.find(r => r.release_date && r.release_date.startsWith(year));
       if (exactMatch) return exactMatch.id;
+      // Close year match (+/- 1 year)
+      const numYear = parseInt(year, 10);
+      const closeMatch = results.find(r => {
+        if (!r.release_date) return false;
+        const ry = parseInt(r.release_date.slice(0, 4), 10);
+        return Math.abs(ry - numYear) <= 1;
+      });
+      if (closeMatch) return closeMatch.id;
     }
 
-    console.log(`[TMDB] Match for "${title}" (${year || 'no year'}): ID ${results[0].id}`);
     return results[0].id;
   } catch (err) {
-    console.warn(`[TMDB] Search error for "${title}":`, err.message);
+    state.tmdbLastError = 'worker_unavailable';
     return null;
   }
 }
 
 /**
- * Fetch watch providers (flatrate) from TMDB for a specific movie ID and configured region.
+ * Fetch watch providers (flatrate) from TMDB via Worker proxy for a specific movie ID and configured region.
  */
 async function getTmdbWatchProviders(tmdbId, region) {
   if (!tmdbId) return [];
-  const cfg = getTmdbFetchConfig(`https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers`);
+  const cfg = getTmdbFetchConfig(`/movie/${tmdbId}/watch/providers`);
   if (!cfg) return [];
 
   try {
     const res = await fetch(cfg.url, cfg.options);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      if (res.status === 401) {
+        state.tmdbLastError = 'tmdb_auth_error';
+      } else if (res.status === 403 || res.status >= 500) {
+        state.tmdbLastError = 'worker_unavailable';
+      } else {
+        state.tmdbLastError = 'tmdb_error';
+      }
+      return [];
+    }
 
     const json = await res.json();
+    if (json.success === false || json.status_code) {
+      if (json.status_code === 7 || json.status_code === 3) {
+        state.tmdbLastError = 'tmdb_auth_error';
+      } else {
+        state.tmdbLastError = 'tmdb_error';
+      }
+      return [];
+    }
+
     const regionData = json.results?.[region];
     if (!regionData) return [];
 
@@ -2753,13 +2924,14 @@ async function getTmdbWatchProviders(tmdbId, region) {
       display_priority: p.display_priority ?? 999
     }));
   } catch (err) {
-    console.warn(`[TMDB] Providers error for ID ${tmdbId}:`, err.message);
+    state.tmdbLastError = 'worker_unavailable';
     return [];
   }
 }
 
 /**
  * Resolve TMDB ID and watch providers for a single movie (with cache).
+ * Prioritizes direct TMDB ID from Letterboxd HTML metadata to guarantee 100% accurate match.
  */
 async function resolveMovieStreamingProviders(movie) {
   const region = tmdbConfig.region;
@@ -2768,14 +2940,24 @@ async function resolveMovieStreamingProviders(movie) {
     return cached;
   }
 
-  const tmdbId = await searchTmdbMovie(movie.title, movie.year);
+  // 1. Direct TMDB ID from Letterboxd HTML if already scraped/cached
+  let tmdbId = movie.tmdbId || filmMetaCache.get(movie.id)?.tmdbId || null;
+
+  // 2. If not yet extracted, search TMDB by title and release year
+  if (!tmdbId) {
+    tmdbId = await searchTmdbMovie(movie.title, movie.year);
+  }
+
   let providers = [];
   if (tmdbId) {
     providers = await getTmdbWatchProviders(tmdbId, region);
   }
 
   const result = { tmdbId, providers };
-  tmdbProviderCache.set(movie.id, region, result);
+  // Only cache if TMDB search succeeded with a valid ID and no auth/worker error occurred
+  if (tmdbId && !state.tmdbLastError) {
+    tmdbProviderCache.set(movie.id, region, result);
+  }
   return result;
 }
 
@@ -2784,8 +2966,7 @@ async function resolveMovieStreamingProviders(movie) {
  * Updates progress UI, updates cards with streaming badges, and renders dynamic filter chips.
  */
 async function loadStreamingProvidersForCommonMovies(movies, searchId) {
-  const apiKey = tmdbConfig.apiKey;
-  if (!apiKey) {
+  if (!tmdbConfig.isConfigured) {
     if (streamingFilterBar) {
       streamingFilterBar.classList.remove('hidden');
       if (streamingChipsContainer) {
@@ -2796,6 +2977,7 @@ async function loadStreamingProvidersForCommonMovies(movies, searchId) {
     return;
   }
 
+  state.tmdbLastError = null;
   const region = tmdbConfig.region;
   state.selectedProviders.clear();
   state.commonProvidersMap = {};
@@ -2850,8 +3032,8 @@ async function loadStreamingProvidersForCommonMovies(movies, searchId) {
             // Update individual movie card badge immediately
             updateMovieCardProvidersUI(movie.id, data.providers, region);
           })
-          .catch(err => {
-            console.warn(`[Streaming] Error processing ${movie.title}:`, err);
+          .catch(() => {
+            // Error already tracked in state.tmdbLastError
           })
           .finally(() => {
             active--;
@@ -2868,40 +3050,130 @@ async function loadStreamingProvidersForCommonMovies(movies, searchId) {
 
   if (streamingProgress) streamingProgress.classList.add('hidden');
 
+  if (state.tmdbLastError) {
+    console.error(`[TMDB Proxy] Error al consultar streaming: ${state.tmdbLastError}`);
+  }
+
   // Render filter chips for platforms that actually appear in this comparison
   renderStreamingFilterChips([...allAvailableProvidersMap.values()]);
+}
+
+/**
+ * Resolves streaming providers on-demand for all unique movies per user.
+ */
+async function loadStreamingProvidersForUniqueMovies() {
+  if (!tmdbConfig.isConfigured) return;
+  const uniqueMap = state.lastResults?.comparison?.uniqueByUser || state.lastResults?.uniqueByUser;
+  if (!uniqueMap) return;
+
+  const allUnique = Object.values(uniqueMap).flat();
+  if (allUnique.length === 0) return;
+
+  if (btnLoadUniqueStreaming) {
+    btnLoadUniqueStreaming.disabled = true;
+    btnLoadUniqueStreaming.classList.add('loading');
+    if (btnLoadUniqueStreamingText) {
+      btnLoadUniqueStreamingText.textContent = t('unique.load_streaming');
+    }
+  }
+
+  if (uniqueStreamingProgress) {
+    uniqueStreamingProgress.classList.remove('hidden');
+  }
+
+  const region = tmdbConfig.region;
+  let completed = 0;
+  const total = allUnique.length;
+
+  const updateProgress = () => {
+    if (uniqueStreamingProgressText) {
+      uniqueStreamingProgressText.textContent = t('unique.loading_streaming', { region, current: completed, total });
+    }
+  };
+  updateProgress();
+
+  const concurrency = Math.min(tmdbConfig.maxConcurrency, 6);
+  let idx = 0;
+  let active = 0;
+  const currentSearchId = state.currentSearchId;
+
+  await new Promise(resolve => {
+    function next() {
+      if (state.currentSearchId !== currentSearchId) return resolve();
+      if (idx >= allUnique.length && active === 0) return resolve();
+
+      while (active < concurrency && idx < allUnique.length) {
+        const movie = allUnique[idx++];
+        active++;
+
+        resolveMovieStreamingProviders(movie)
+          .then(data => {
+            if (state.currentSearchId !== currentSearchId) return;
+            state.commonProvidersMap[movie.id] = data;
+            updateMovieCardProvidersUI(movie.id, data.providers, region);
+          })
+          .catch(() => {})
+          .finally(() => {
+            active--;
+            completed++;
+            updateProgress();
+            next();
+          });
+      }
+    }
+    next();
+  });
+
+  if (state.currentSearchId !== currentSearchId) return;
+
+  if (uniqueStreamingProgress) {
+    uniqueStreamingProgress.classList.add('hidden');
+  }
+
+  state.uniqueProvidersLoaded = true;
+  if (btnLoadUniqueStreaming) {
+    btnLoadUniqueStreaming.disabled = false;
+    btnLoadUniqueStreaming.classList.remove('loading');
+    if (btnLoadUniqueStreamingText) {
+      btnLoadUniqueStreamingText.textContent = t('unique.streaming_loaded');
+    }
+  }
 }
 
 /**
  * Updates an individual movie card with its provider logos or "Not available" text
  */
 function updateMovieCardProvidersUI(movieId, providers, region) {
-  const card = commonGrid?.querySelector(`[data-movie-id="${CSS.escape(movieId)}"]`);
-  if (!card) return;
+  const cards = document.querySelectorAll(`[data-movie-id="${CSS.escape(movieId)}"]`);
+  if (!cards.length) return;
 
-  const infoEl = card.querySelector('.movie-info');
-  if (!infoEl) return;
+  cards.forEach(card => {
+    const infoEl = card.querySelector('.movie-info');
+    if (!infoEl) return;
 
-  let existingRow = infoEl.querySelector('.movie-providers-row');
-  if (existingRow) existingRow.remove();
+    let existingRow = infoEl.querySelector('.movie-providers-row');
+    if (existingRow) existingRow.remove();
 
-  const row = document.createElement('div');
-  row.className = 'movie-providers-row';
+    const row = document.createElement('div');
+    row.className = 'movie-providers-row';
 
-  if (providers && providers.length > 0) {
-    // Show top 4 provider icons max on card
-    const topProviders = providers.slice(0, 4);
-    row.innerHTML = topProviders.map(p => {
-      if (p.logo_path) {
-        return `<img class="movie-provider-icon" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" title="${escapeAttr(p.provider_name)}" loading="lazy" />`;
-      }
-      return '';
-    }).join('');
-  } else {
-    row.innerHTML = `<span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>`;
-  }
+    if (providers && providers.length > 0) {
+      // Show top 4 provider icons max on card
+      const topProviders = providers.slice(0, 4);
+      row.innerHTML = topProviders.map(p => {
+        if (p.logo_path) {
+          return `<img class="movie-provider-icon" src="${escapeAttr(p.logo_path)}" alt="${escapeAttr(p.provider_name)}" title="${escapeAttr(p.provider_name)}" loading="lazy" />`;
+        }
+        return '';
+      }).join('');
+    } else {
+      // Do NOT display false "Not available" badge if TMDB had an error (auth/worker error)
+      if (state.tmdbLastError) return;
+      row.innerHTML = `<span class="movie-no-stream-badge">${t('stream.not_available', { region })}</span>`;
+    }
 
-  infoEl.appendChild(row);
+    infoEl.appendChild(row);
+  });
 }
 
 /**
@@ -2912,7 +3184,15 @@ function renderStreamingFilterChips(providers) {
   streamingChipsContainer.innerHTML = '';
 
   if (providers.length === 0) {
-    streamingChipsContainer.innerHTML = `<span class="movie-no-stream-badge" style="font-size:0.8rem;color:var(--text-muted);">${t('stream.not_available', { region: tmdbConfig.region })}</span>`;
+    let errorMsgKey = 'stream.not_available';
+    if (state.tmdbLastError === 'tmdb_auth_error') {
+      errorMsgKey = 'stream.tmdb_auth_error';
+    } else if (state.tmdbLastError === 'worker_unavailable') {
+      errorMsgKey = 'stream.worker_unavailable';
+    } else if (state.tmdbLastError === 'tmdb_error') {
+      errorMsgKey = 'stream.tmdb_error';
+    }
+    streamingChipsContainer.innerHTML = `<span class="movie-no-stream-badge" style="font-size:0.8rem;color:var(--text-muted);">${t(errorMsgKey, { region: tmdbConfig.region })}</span>`;
     return;
   }
 

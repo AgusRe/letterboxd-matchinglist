@@ -2,14 +2,20 @@
  * LETTERBOXD MATCH — Configuration File (Template)
  *
  * INSTRUCTIONS:
- * 1. Duplicate this file and rename it to `config.js` in the root directory.
- * 2. Add your TMDB (The Movie Database) v3 API key below.
- * 3. `config.js` is included in .gitignore to avoid committing sensitive keys.
+ * 1. Duplicate this file and rename it to `config.js` in the root directory (optional).
+ * 2. Configure your Cloudflare Worker URL (reverse proxy for Letterboxd and TMDB).
+ *    In production, the Worker handles TMDB authentication server-side.
+ * 3. (Optional) You can provide a direct TMDB_API_KEY for local development or direct querying.
  */
 
 window.APP_CONFIG = {
-  // TMDB API v3 Key (32-character hex string, e.g. "d4e1a2b3c4d5e6f7a8b9c0d1e2f3a4b5")
-  // Get one for free at: https://www.themoviedb.org/settings/api
+  // Cloudflare Worker Base URL (used as reverse proxy for Letterboxd & TMDB in production)
+  // Default points to the deployed instance: https://letterboxd-proxy.agustin2-re.workers.dev
+  WORKER_BASE_URL: "https://letterboxd-proxy.agustin2-re.workers.dev",
+
+  // (Optional) Direct TMDB API v3 Key (32 hex characters) or v4 Bearer Read Access Token.
+  // If provided, queries to TMDB go directly to the official TMDB API without proxying.
+  // Useful for local testing if the Cloudflare Worker is not yet configured with TMDB secrets.
   TMDB_API_KEY: "",
 
   // Default region code (ISO 3166-1 alpha-2, e.g. "AR", "US", "ES", "MX") for Watch Providers
@@ -21,3 +27,4 @@ window.APP_CONFIG = {
   // Maximum concurrent requests to TMDB to prevent rate-limiting
   TMDB_MAX_CONCURRENCY: 6
 };
+

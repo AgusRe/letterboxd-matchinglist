@@ -376,6 +376,19 @@
             <span class="accent-dot accent-orange"></span>
             Unique Movies per User
           </h2>
+          <div class="results-actions">
+            <button class="btn-action-sm" id="btn-load-unique-streaming" title="Load streaming platform availability for these movies" aria-label="Load streaming platforms">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"/>
+                <polyline points="17 2 12 7 7 2"/>
+              </svg>
+              <span id="btn-load-unique-streaming-text">Load platforms</span>
+            </button>
+          </div>
+        </div>
+        <div id="unique-streaming-progress" class="streaming-progress hidden" aria-live="polite" style="margin-bottom: 0.75rem;">
+          <span class="spinner-sm" aria-hidden="true"></span>
+          <span id="unique-streaming-progress-text">Checking platforms…</span>
         </div>
         <div id="unique-tabs" class="tabs" role="tablist"></div>
         <div id="unique-panels" class="tab-panels"></div>

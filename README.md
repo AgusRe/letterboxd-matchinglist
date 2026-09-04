@@ -119,31 +119,41 @@ Para esos momentos en los que el grupo no sabe qué elegir:
 
 La aplicación permite filtrar las películas que tienen en común según las plataformas de streaming disponibles en tu región (Netflix, Max, Prime Video, Disney+, Apple TV+, etc.):
 
-1. **Matching Automático:** Busca cada título y año en The Movie Database (TMDB).
-2. **Disponibilidad en Streaming:** Consulta el endpoint oficial `/movie/{id}/watch/providers` extrayendo las opciones de suscripción plana (*flatrate*).
+1. **Matching Automático:** Busca cada título y año en The Movie Database (TMDB) a través de un proxy inverso seguro.
+2. **Disponibilidad en Streaming:** Consulta el endpoint `/movie/{id}/watch/providers` extrayendo las opciones de suscripción plana (*flatrate*).
 3. **Chips Dinámicos:** Muestra chips interactivos con los logos oficiales únicamente de las plataformas presentes en los resultados comunes de esa comparación.
 4. **Caché Inteligente:** Guarda las consultas en `localStorage` con un TTL de **48 horas** (`lbmatch_v1_providers_{slug}_{region}`) para respuestas ultrarrápidas y menor consumo de red.
-5. **Degradación Grácil:** Si no se configura una clave de TMDB o si la API falla, la comparación sigue funcionando normalmente y solo se desactiva el filtro de plataformas.
+5. **Seguridad Total:** Las llamadas no exponen ninguna clave en el cliente ni en GitHub Pages; el Cloudflare Worker inyecta la API Key de TMDB server-side.
+6. **Degradación Grácil:** Si el servicio de streaming no está disponible o falla, la comparación de Letterboxd sigue funcionando normalmente e informa el estado en pantalla.
 
-### 🔑 Cómo configurar tu API Key de TMDB
+### ⚙️ Arquitectura del Proxy y Configuración
 
-1. **Creá una cuenta gratuita en TMDB:** Registrate en [themoviedb.org](https://www.themoviedb.org/signup).
-2. **Generá tu API Key:**
-   - Andá a tu **Perfil → Configuración → API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)).
-   - Solicitá una API Key de tipo **Developer** (gratuita).
-   - Copiá tu **API Key (v3 auth)** (un string de 32 caracteres alfanuméricos).
-3. **Configurá el proyecto:**
-   - Creá un archivo `config.js` en la raíz del proyecto (podés copiar `config.example.js` como base).
-   - Pegá tu API Key y configurá tu país preferido (código ISO de 2 letras, ej. `AR`, `US`, `ES`, `MX`):
-     ```javascript
-     window.APP_CONFIG = {
-       TMDB_API_KEY: "tu_api_key_aqui_de_32_caracteres",
-       TMDB_REGION: "AR",              // País para catálogo de streaming
-       STREAMING_CACHE_TTL_HOURS: 48,  // Horas de caché
-       TMDB_MAX_CONCURRENCY: 6         // Concurrencia de peticiones
-     };
-     ```
-   - El archivo `config.js` está incluido en `.gitignore` para proteger tu clave privada.
+Por defecto, la aplicación se comunica con una instancia pública del Cloudflare Worker configurada para este proyecto:
+`https://letterboxd-proxy.agustin2-re.workers.dev`
+
+#### Personalización Regional (`config.js`)
+Si querés cambiar la región predeterminada o la concurrencia, podés crear un archivo `config.js` en la raíz (basado en `config.example.js`):
+```javascript
+window.APP_CONFIG = {
+  WORKER_BASE_URL: "https://letterboxd-proxy.agustin2-re.workers.dev",
+  TMDB_REGION: "AR",              // País para catálogo de streaming (código ISO: AR, US, ES, MX, etc.)
+  STREAMING_CACHE_TTL_HOURS: 48,  // Horas de persistencia en caché
+  TMDB_MAX_CONCURRENCY: 6         // Concurrencia de peticiones simultáneas
+};
+```
+
+#### Despliegue de tu propio Worker (opcional para forks)
+Si forkeás el repositorio y deseás utilizar tu propia infraestructura de Cloudflare:
+1. Encontrarás el código de referencia en [`worker/worker.js`](worker/worker.js).
+2. Desplegalo en tu cuenta de Cloudflare Workers con Wrangler:
+   ```bash
+   npx wrangler deploy
+   ```
+3. Configurá de forma segura tu clave de TMDB en el Worker:
+   ```bash
+   npx wrangler secret put TMDB_API_KEY --name tu-worker-name
+   ```
+4. Actualizá `WORKER_BASE_URL` en tu `config.js` apuntando a tu URL (`https://tu-worker.workers.dev`).
 
 ---
 
@@ -248,6 +258,9 @@ letterboxd-matchinglist/
 ├── robots.txt       ← Directivas de rastreo para motores de búsqueda y referencia al sitemap
 ├── sitemap.xml      ← Mapa del sitio XML con 2 URLs (/ y /en/) y anotaciones hreflang
 ├── og-image.png     ← Banner Open Graph (1200x630) para previsualizaciones en redes sociales
+├── config.example.js ← Plantilla de configuración opcional (WORKER_BASE_URL, región, caché)
+├── worker/
+│   └── worker.js    ← Código de referencia para el Cloudflare Worker (Letterboxd CORS + TMDB reverse proxy)
 ├── favicons/        ← Iconos y favicons multi-resolución (SVG, PNG, ICO, Webmanifest)
 ├── proxy-server.js  ← Proxy CORS y servidor de desarrollo estático local (`node proxy-server.js`)
 └── README.md        ← Documentación completa del proyecto y guía de indexación

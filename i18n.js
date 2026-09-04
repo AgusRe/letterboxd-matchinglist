@@ -124,9 +124,14 @@ const TRANSLATIONS = {
     "stream.not_available": "No disponible en streaming en {region}",
     "stream.available_on": "Disponible en streaming ({region}):",
     "stream.no_matches_filter": "No hay películas que coincidan con las plataformas seleccionadas.",
-    "stream.tmdb_disabled": "Filtro de streaming desactivado (configurá tu TMDB API Key en config.js)",
-    "stream.tmdb_error": "No se pudo conectar con TMDB para consultar streaming.",
+    "stream.tmdb_disabled": "Filtro de streaming desactivado (configurá WORKER_BASE_URL en config.js)",
+    "stream.worker_unavailable": "El servicio proxy (Worker) no está disponible o bloqueó la solicitud.",
+    "stream.tmdb_error": "TMDB rechazó la petición o devolvió un error.",
+    "stream.tmdb_auth_error": "API Key de TMDB inválida o no configurada en Cloudflare Worker.",
     "stream.badge_stream": "Streaming",
+    "unique.load_streaming": "Cargar plataformas",
+    "unique.loading_streaming": "Buscando plataformas en {region}… ({current}/{total})",
+    "unique.streaming_loaded": "Plataformas listas",
 
     // ── Legal & Footer ──
     // TODO: Si en el futuro se incorpora algún servicio de analítica web (ej. GA, Plausible), actualizar esta nota de privacidad.
@@ -254,9 +259,14 @@ const TRANSLATIONS = {
     "stream.not_available": "Not available to stream in {region}",
     "stream.available_on": "Available on streaming ({region}):",
     "stream.no_matches_filter": "No common movies match the selected streaming platforms.",
-    "stream.tmdb_disabled": "Streaming filter disabled (configure your TMDB API Key in config.js)",
-    "stream.tmdb_error": "Could not connect to TMDB to fetch streaming providers.",
+    "stream.tmdb_disabled": "Streaming filter disabled (configure WORKER_BASE_URL in config.js)",
+    "stream.worker_unavailable": "The proxy service (Worker) is unavailable or rejected the request.",
+    "stream.tmdb_error": "TMDB rejected the request or returned an error.",
+    "stream.tmdb_auth_error": "TMDB API Key is invalid or not configured on Cloudflare Worker.",
     "stream.badge_stream": "Streaming",
+    "unique.load_streaming": "Load platforms",
+    "unique.loading_streaming": "Checking platforms in {region}… ({current}/{total})",
+    "unique.streaming_loaded": "Platforms ready",
 
     // ── Legal & Footer ──
     // TODO: If web analytics (e.g. GA, Plausible) is added in the future, update this privacy note.

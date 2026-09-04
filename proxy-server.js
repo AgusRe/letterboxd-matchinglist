@@ -69,7 +69,6 @@ function proxyRequest(targetUrl, res) {
     // Follow redirects (Letterboxd sometimes redirects)
     if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
       const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
-      console.log(`  ↳ Redirect ${proxyRes.statusCode} → ${redirectUrl}`);
       proxyRequest(redirectUrl, res);
       return;
     }
@@ -81,8 +80,6 @@ function proxyRequest(targetUrl, res) {
     let body = '';
     proxyRes.on('data', chunk => { body += chunk; });
     proxyRes.on('end', () => {
-      const elapsed = Date.now() - startTime;
-      console.log(`  ✅ ${proxyRes.statusCode} — ${body.length} chars — ${elapsed}ms`);
       res.end(body);
     });
   });
@@ -121,6 +118,83 @@ function serveStaticFile(filePath, res) {
   });
 }
 
+// ── TMDB local helper: check for TMDB API key ────────────────────────────────
+function getLocalTmdbKey() {
+  if (process.env.TMDB_API_KEY && process.env.TMDB_API_KEY.trim()) {
+    return process.env.TMDB_API_KEY.trim();
+  }
+  try {
+    const cfgPath = path.join(STATIC_DIR, 'config.js');
+    if (fs.existsSync(cfgPath)) {
+      const content = fs.readFileSync(cfgPath, 'utf8');
+      // Only match if not commented out
+      const m = content.match(/^[ \t]*TMDB_API_KEY\s*:\s*["']([^"']+)["']/m);
+      if (m && m[1].trim()) return m[1].trim();
+    }
+  } catch {}
+  return '';
+}
+
+// ── TMDB Proxy: relay TMDB requests server-side without CORS restrictions ────
+function proxyTmdbRequest(req, res, parsedUrl) {
+  const tmdbSubPath = parsedUrl.path.replace(/^\/tmdb/, ''); // e.g. /search/movie?query=...
+  const localKey = getLocalTmdbKey();
+
+  let targetUrl;
+  let headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'LetterboxdMatch-LocalProxy/1.0'
+  };
+
+  if (localKey) {
+    const isBearer = localKey.startsWith('ey') || localKey.length > 60;
+    const separator = tmdbSubPath.includes('?') ? '&' : '?';
+    targetUrl = isBearer
+      ? `https://api.themoviedb.org/3${tmdbSubPath}`
+      : `https://api.themoviedb.org/3${tmdbSubPath}${separator}api_key=${encodeURIComponent(localKey)}`;
+    if (isBearer) {
+      headers['Authorization'] = `Bearer ${localKey}`;
+    }
+  } else {
+    // Relay to Cloudflare Worker, sending Origin: https://agusre.github.io to prevent CORS block
+    targetUrl = `https://letterboxd-proxy.agustin2-re.workers.dev/tmdb${tmdbSubPath}`;
+    headers['Origin'] = 'https://agusre.github.io';
+    headers['Referer'] = 'https://agusre.github.io/';
+  }
+
+  const parsedTarget = new URL(targetUrl);
+  const options = {
+    hostname: parsedTarget.hostname,
+    port: 443,
+    path: parsedTarget.pathname + parsedTarget.search,
+    method: 'GET',
+    headers: headers
+  };
+
+  const proxyReq = https.request(options, (proxyRes) => {
+    setCorsHeaders(res);
+    res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'application/json; charset=utf-8');
+    res.writeHead(proxyRes.statusCode);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`  ❌ TMDB proxy error: ${err.message}`);
+    setCorsHeaders(res);
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: `TMDB proxy error: ${err.message}` }));
+  });
+
+  proxyReq.setTimeout(12000, () => {
+    proxyReq.destroy();
+    setCorsHeaders(res);
+    res.writeHead(504, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'TMDB proxy timeout (12s)' }));
+  });
+
+  proxyReq.end();
+}
+
 // ── HTTP Server ──────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   // Handle CORS preflight
@@ -141,8 +215,13 @@ const server = http.createServer((req, res) => {
       res.end('Missing ?url= parameter');
       return;
     }
-    console.log(`[Proxy] ${targetUrl}`);
     proxyRequest(targetUrl, res);
+    return;
+  }
+
+  // ── TMDB Proxy endpoint: /tmdb/* ──────────────────────────────────────────
+  if (parsedUrl.pathname.startsWith('/tmdb/')) {
+    proxyTmdbRequest(req, res, parsedUrl);
     return;
   }
 
@@ -165,14 +244,26 @@ const server = http.createServer((req, res) => {
   serveStaticFile(filePath, res);
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n[ERROR] El puerto ${PORT} ya está en uso por otro proceso.`);
+    console.error(`Para solucionarlo: cerrá la terminal/proceso que usa el puerto ${PORT} o ejecutá:`);
+    console.error(`  PORT=3001 node proxy-server.js\n`);
+    process.exit(1);
+  } else {
+    console.error('[Server Error]', err);
+  }
+});
+
 server.listen(PORT, () => {
   console.log('');
   console.log('  ╔══════════════════════════════════════════════╗');
   console.log('  ║   🎬 LetterboxdMatch — Server running       ║');
   console.log(`  ║   → http://localhost:${PORT}                    ║`);
   console.log('  ║                                              ║');
-  console.log('  ║   Proxy endpoint:                            ║');
+  console.log('  ║   Proxy endpoints:                           ║');
   console.log(`  ║   → http://localhost:${PORT}/proxy?url=...       ║`);
+  console.log(`  ║   → http://localhost:${PORT}/tmdb/...            ║`);
   console.log('  ╚══════════════════════════════════════════════╝');
   console.log('');
 });
