@@ -1,0 +1,402 @@
+{
+  "communities": {
+    "0": [
+      "app",
+      "app_btnadduser",
+      "app_btnclearhistory",
+      "app_btnclearinputs",
+      "app_btnclosehistory",
+      "app_btncompare",
+      "app_btnexportcsv",
+      "app_btnshareresults",
+      "app_btnsortcommon",
+      "app_btntogglehistory",
+      "app_collectinputvalues",
+      "app_commoncount",
+      "app_commonempty",
+      "app_commonemptydesc",
+      "app_commonemptytitle",
+      "app_commongrid",
+      "app_comparisonhistory",
+      "app_errorbanner",
+      "app_extractposter",
+      "app_extractslug",
+      "app_filmmetacache",
+      "app_gettext",
+      "app_historybadge",
+      "app_historylist",
+      "app_historypanel",
+      "app_islocaldev",
+      "app_isvalidletterboxdurl",
+      "app_letterboxdcache",
+      "app_loadingmessage",
+      "app_loadingsection",
+      "app_modalclosebtn",
+      "app_modalcontent",
+      "app_moviemodal",
+      "app_normalizetitle",
+      "app_parsetitle",
+      "app_proxies",
+      "app_proxyhealthdot",
+      "app_proxyhealthindicator",
+      "app_proxyhealthlabel",
+      "app_proxylivebanner",
+      "app_proxylivetext",
+      "app_proxyspeedlog",
+      "app_rationale_842",
+      "app_resultssection",
+      "app_sharebtntext",
+      "app_state",
+      "app_statsbar",
+      "app_streamingchipscontainer",
+      "app_streamingfilterbar",
+      "app_streamingfilterlabel",
+      "app_streamingprogress",
+      "app_streamingprogresstext",
+      "app_striphtml",
+      "app_tmdbconfig",
+      "app_tmdbprovidercache",
+      "app_top5optstreamwrap",
+      "app_top5state",
+      "app_uniquepanels",
+      "app_uniquetabs",
+      "app_userscontainer"
+    ],
+    "1": [
+      "app_btntop5start",
+      "app_closetop5",
+      "app_eliminatetop5card",
+      "app_focusnexttop5card",
+      "app_getavailablecommonproviderslist",
+      "app_inittop5",
+      "app_launchconfetti",
+      "app_launchconfetti_draw",
+      "app_opentop5",
+      "app_rendertop5cards",
+      "app_showtop5setup",
+      "app_showtop5winner",
+      "app_stopconfetti",
+      "app_top5chipscontainer",
+      "app_top5confetticvs",
+      "app_top5counter",
+      "app_top5grid",
+      "app_top5loading",
+      "app_top5loadingmsg",
+      "app_top5optalllabel",
+      "app_top5optallsub",
+      "app_top5optstreamlabel",
+      "app_top5optstreamsub",
+      "app_top5overlay",
+      "app_top5remaining",
+      "app_top5setup",
+      "app_top5setupchips",
+      "app_top5setupdesc",
+      "app_top5setuptitle",
+      "app_top5winnerbanner",
+      "app_updatetop5counter",
+      "app_winnerlblink",
+      "app_winnermoviename"
+    ],
+    "2": [
+      "app_applystreamingfilter",
+      "app_createmoviecard",
+      "app_decodehtmlentities",
+      "app_enrichgridposters",
+      "app_enrichgridposters_next",
+      "app_enrichmoviemeta",
+      "app_escapeattr",
+      "app_escapehtml",
+      "app_formatrelativetime",
+      "app_handlecopysharelink",
+      "app_initfooterlegal",
+      "app_inithistoryui",
+      "app_initproxyhealthui",
+      "app_loadstreamingprovidersforcommonmovies",
+      "app_loadstreamingprovidersforcommonmovies_next",
+      "app_openmoviemodal",
+      "app_posterfallback",
+      "app_ratingtostars",
+      "app_rendercommonmovies",
+      "app_renderhistoryui",
+      "app_rendermodalcontent",
+      "app_renderresults",
+      "app_renderstreamingfilterchips",
+      "app_renderuniquetabs",
+      "app_switchtab",
+      "app_t",
+      "app_updatemoviecardprovidersui"
+    ],
+    "3": [
+      "app_adduserrow",
+      "app_applyvalidationui",
+      "app_attachrowvalidation",
+      "app_builduserrows",
+      "app_clearallrowstatuses",
+      "app_closehistorypanel",
+      "app_closemodal",
+      "app_debounce",
+      "app_handleclearinputs",
+      "app_init",
+      "app_isvalidletterboxdlisturl",
+      "app_loadhistoryitem",
+      "app_parseurlparamsonload",
+      "app_preloadlastsearch",
+      "app_removeuserrow",
+      "app_renumberrows",
+      "app_setupeventlisteners",
+      "app_switchsourcemode",
+      "app_togglehistorypanel",
+      "app_updateaddbutton",
+      "app_updatecomparebuttonstate",
+      "app_validateinputvalue"
+    ],
+    "4": [
+      "app_attemptproxy",
+      "app_computecomparison",
+      "app_exportcommonmoviestocsv",
+      "app_extractlabel",
+      "app_fetchandparselist",
+      "app_fetchviafastestproxy",
+      "app_fetchwithtimeout",
+      "app_handlecompare",
+      "app_handleretryuser",
+      "app_hideerror",
+      "app_hideloading",
+      "app_isvalidusername",
+      "app_normalizepageurl",
+      "app_reportproxystatus",
+      "app_setrowstatus",
+      "app_showerror",
+      "app_showloading",
+      "app_sleep",
+      "app_synclangtoggle",
+      "app_updatefooterproxyhealth",
+      "app_updateloadingmessage",
+      "app_updateurlparams"
+    ],
+    "5": [
+      "manifest",
+      "manifest_background_color",
+      "manifest_categories",
+      "manifest_description",
+      "manifest_display",
+      "manifest_icons",
+      "manifest_lang",
+      "manifest_name",
+      "manifest_orientation",
+      "manifest_scope",
+      "manifest_short_name",
+      "manifest_start_url",
+      "manifest_theme_color",
+      "ref_entertainment",
+      "ref_movies",
+      "ref_utilities"
+    ],
+    "6": [
+      "proxy_server",
+      "proxy_server_fs",
+      "proxy_server_http",
+      "proxy_server_https",
+      "proxy_server_mime_types",
+      "proxy_server_path",
+      "proxy_server_proxyrequest",
+      "proxy_server_server",
+      "proxy_server_servestaticfile",
+      "proxy_server_setcorsheaders",
+      "proxy_server_url"
+    ],
+    "7": [
+      "scratch_verify_bilingual",
+      "scratch_verify_bilingual_check",
+      "scratch_verify_bilingual_enindexhtml",
+      "scratch_verify_bilingual_fs",
+      "scratch_verify_bilingual_i18njs",
+      "scratch_verify_bilingual_indexhtml",
+      "scratch_verify_bilingual_jsonldenmatch",
+      "scratch_verify_bilingual_jsonldesmatch",
+      "scratch_verify_bilingual_path",
+      "scratch_verify_bilingual_rootdir",
+      "scratch_verify_bilingual_sitemapxml"
+    ],
+    "8": [
+      "i18n",
+      "i18n_i18n",
+      "i18n_rationale_132",
+      "i18n_rationale_262",
+      "i18n_translations"
+    ],
+    "9": [
+      "app_gettmdbfetchconfig",
+      "app_gettmdbwatchproviders",
+      "app_resolvemoviestreamingproviders",
+      "app_searchtmdbmovie"
+    ],
+    "10": [
+      "app_cleanmovietitle",
+      "app_parsehtmlfilmposters"
+    ],
+    "11": [
+      "config_example"
+    ]
+  },
+  "cohesion": {
+    "0": 0.03333333333333333,
+    "1": 0.10416666666666667,
+    "2": 0.13675213675213677,
+    "3": 0.21645021645021645,
+    "4": 0.1341991341991342,
+    "5": 0.125,
+    "6": 0.2727272727272727,
+    "7": 0.18181818181818182,
+    "8": 0.4,
+    "9": 0.6666666666666666,
+    "10": 1.0,
+    "11": 1.0
+  },
+  "gods": [
+    {
+      "id": "app_t",
+      "label": "t()",
+      "degree": 27
+    },
+    {
+      "id": "app_setupeventlisteners",
+      "label": "setupEventListeners()",
+      "degree": 21
+    },
+    {
+      "id": "app_showtop5setup",
+      "label": "showTop5Setup()",
+      "degree": 20
+    },
+    {
+      "id": "app_handlecompare",
+      "label": "handleCompare()",
+      "degree": 19
+    },
+    {
+      "id": "app_inittop5",
+      "label": "initTop5()",
+      "degree": 14
+    },
+    {
+      "id": "app_handleretryuser",
+      "label": "handleRetryUser()",
+      "degree": 11
+    },
+    {
+      "id": "app_updatecomparebuttonstate",
+      "label": "updateCompareButtonState()",
+      "degree": 10
+    },
+    {
+      "id": "app_validateinputvalue",
+      "label": "validateInputValue()",
+      "degree": 10
+    },
+    {
+      "id": "app_closetop5",
+      "label": "closeTop5()",
+      "degree": 9
+    },
+    {
+      "id": "app_rendertop5cards",
+      "label": "renderTop5Cards()",
+      "degree": 9
+    }
+  ],
+  "surprises": [
+    {
+      "source": "setupEventListeners()",
+      "target": "handleCopyShareLink()",
+      "source_files": [
+        "app.js",
+        "app.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "note": "Bridges community 2 → community 3"
+    },
+    {
+      "source": "setupEventListeners()",
+      "target": "exportCommonMoviesToCsv()",
+      "source_files": [
+        "app.js",
+        "app.js"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "note": "Bridges community 3 → community 4"
+    },
+    {
+      "source": "setupEventListeners()",
+      "target": "closeTop5()",
+      "source_files": [
+        "app.js",
+        "app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 1 → community 3"
+    },
+    {
+      "source": "initTop5()",
+      "target": "enrichMovieMeta()",
+      "source_files": [
+        "app.js",
+        "app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 1 → community 2"
+    },
+    {
+      "source": "fetchAndParseList()",
+      "target": "parseHtmlFilmPosters()",
+      "source_files": [
+        "app.js",
+        "app.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "note": "Bridges community 10 → community 4"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `launchConfetti()` connect `showTop5Setup` to `app.js`?",
+      "why": "High betweenness centrality (0.007) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `t()` connect `t` to `app.js`, `showTop5Setup`, `setupEventListeners`, `handleCompare`?",
+      "why": "High betweenness centrality (0.007) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `showTop5Setup()` connect `showTop5Setup` to `app.js`, `t`?",
+      "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 7 inferred relationships involving `setupEventListeners()` (e.g. with `closeHistoryPanel()` and `closeModal()`) actually correct?",
+      "why": "`setupEventListeners()` has 7 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `btnAddUser`, `btnClearHistory`, `btnClearInputs` to the rest of the system?",
+      "why": "80 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `app.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.03333333333333333 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `showTop5Setup` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.10416666666666667 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1788526923.7029243,
+    "seen": 1788526999.0922341,
+    "ast_hash": "afaa314c5c40015918ad133ae36e93c5",
+    "semantic_hash": "afaa314c5c40015918ad133ae36e93c5"
+  },
+  "app.js": {
+    "mtime": 1788468323.846775,
+    "seen": 1788526999.0922341,
+    "ast_hash": "ba9619d5a505758393a8fe874df426b2",
+    "semantic_hash": "ba9619d5a505758393a8fe874df426b2"
+  },
+  "config.example.js": {
+    "mtime": 1788353986.4143524,
+    "seen": 1788526999.0922341,
+    "ast_hash": "0a6efca807bc4f081494991ad364ba16",
+    "semantic_hash": "0a6efca807bc4f081494991ad364ba16"
+  },
+  "i18n.js": {
+    "mtime": 1788468203.6930935,
+    "seen": 1788526999.0922341,
+    "ast_hash": "9515c26df14eed75568632a92a1e0cde",
+    "semantic_hash": "9515c26df14eed75568632a92a1e0cde"
+  },
+  "manifest.json": {
+    "mtime": 1788189747.2256968,
+    "seen": 1788526999.0922341,
+    "ast_hash": "bb4651e0f75a8465d5c8352c094bcf25",
+    "semantic_hash": "bb4651e0f75a8465d5c8352c094bcf25"
+  },
+  "proxy-server.js": {
+    "mtime": 1788214095.7119281,
+    "seen": 1788526999.0922341,
+    "ast_hash": "beb8181268d45a29689df714c0344933",
+    "semantic_hash": "beb8181268d45a29689df714c0344933"
+  },
+  "scratch/verify-bilingual.js": {
+    "mtime": 1788213517.0325525,
+    "seen": 1788526999.0922341,
+    "ast_hash": "de115ad49c95af97b110d32c453840e7",
+    "semantic_hash": "de115ad49c95af97b110d32c453840e7"
+  }
+}
